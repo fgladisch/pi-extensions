@@ -229,6 +229,42 @@ const merged = { ...DEFAULT_CONFIG, ...userConfig };
 const merged = Object.assign({}, DEFAULT_CONFIG, userConfig);
 ```
 
+### Destructuring
+
+Prefer destructuring over repeatedly reading fields off the same object or copying them into local variables one-by-one. Destructure as close to first use as practical — typically at the top of the function — so the inputs a function actually depends on are explicit and call sites stay short.
+
+Use default values in the destructuring pattern instead of post-hoc `??` / `=== true` checks when the field is optional with a known default.
+
+```typescript
+// Good
+function execute(params: UserSelectInput, ctx: ExtensionContext) {
+  const { question, options, allowCustom = false } = params;
+  const { hasUI, ui } = ctx;
+
+  if (!hasUI) {
+    throw new Error("No UI available");
+  }
+
+  const choice = await ui.select(question, options);
+  // …
+}
+
+// Bad — repeated property access, manual default coercion
+function execute(params: UserSelectInput, ctx: ExtensionContext) {
+  if (!ctx.hasUI) {
+    throw new Error("No UI available");
+  }
+
+  const allowCustom = params.allowCustom === true;
+  const choice = await ctx.ui.select(params.question, params.options);
+  // …
+}
+```
+
+Applies to function parameters, callback arguments, and any object you read multiple fields from. Use renaming (`const { foo: bar } = obj`) only when there is a real naming conflict; gratuitous renames hide the source field.
+
+**Caveat — methods:** Do not destructure methods off their owning object (e.g. `const { select } = ctx.ui;`). It detaches `this` and trips `@typescript-eslint/unbound-method`. Destructure the owner instead and call through it (`const { ui } = ctx; ui.select(...)`).
+
 ### Nullish Coalescing
 
 Prefer `??` over `||` for default values when `0`, `""`, or `false` are valid inputs.
