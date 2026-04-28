@@ -9,7 +9,11 @@ module.exports = {
   transform: {
     "^.+\\.tsx?$": ["ts-jest", { diagnostics: false }],
   },
-  collectCoverageFrom: ["bash-approval.ts", "welcome-message.ts"],
+  collectCoverageFrom: [
+    "bash-approval.ts",
+    "user-select.ts",
+    "welcome-message.ts",
+  ],
   coverageDirectory: "<rootDir>/coverage",
   coverageThreshold: {
     global: {
