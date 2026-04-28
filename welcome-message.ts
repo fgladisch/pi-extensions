@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ThemeColor } from "@mariozechner/pi-coding-agent";
 import { Box, Text } from "@mariozechner/pi-tui";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -11,7 +11,19 @@ const SUCCESS_EXIT_CODE = 0;
 const NOT_FOUND_INDEX = -1;
 const RECENT_COMMITS_COUNT = "5";
 
-export default function (pi: ExtensionAPI) {
+type PackageConfig = {
+  readonly name?: string;
+  readonly version?: string;
+  readonly description?: string;
+};
+
+type ThemeHelper = {
+  readonly bold: (text: string) => string;
+  readonly italic: (text: string) => string;
+  readonly fg: (color: ThemeColor, text: string) => string;
+};
+
+export default function (pi: ExtensionAPI): void {
   pi.registerMessageRenderer("welcome", (message, _options, theme) => {
     const text = new Text(
       typeof message.content === "string" ? message.content : "Welcome",
@@ -21,7 +33,9 @@ export default function (pi: ExtensionAPI) {
     const box = new Box(BOX_WIDTH, BOX_HEIGHT, (t) =>
       theme.bg("customMessageBg", t),
     );
+
     box.addChild(text);
+
     return box;
   });
 
@@ -34,17 +48,22 @@ export default function (pi: ExtensionAPI) {
       return;
     }
 
-    const t = ctx.ui.theme;
+    const themeHelper = ctx.ui.theme as ThemeHelper;
     let output = "";
 
-    const pkgOutput = await buildPackageInfo(ctx.cwd, t);
+    const pkgOutput = await buildPackageInfo(ctx.cwd, themeHelper);
+
     if (pkgOutput) {
       output += `${pkgOutput.trim()}\n`;
     }
 
-    const gitOutput = await buildGitInfo(pi, ctx.cwd, t);
+    const gitOutput = await buildGitInfo(pi, ctx.cwd, themeHelper);
+
     if (gitOutput) {
-      if (output) output += "\n";
+      if (output) {
+        output += "\n";
+      }
+
       output += `${gitOutput.trim()}\n`;
     }
 
@@ -60,58 +79,60 @@ export default function (pi: ExtensionAPI) {
 
 async function buildPackageInfo(
   cwd: string,
-  t: {
-    bold: (s: string) => string;
-    italic: (s: string) => string;
-    fg: (c: any, s: string) => string;
-  },
+  theme: ThemeHelper,
 ): Promise<string> {
   let pkgOutput = "";
   const pkgPath = path.join(cwd, "package.json");
+
   try {
     const pkgRaw = await fs.readFile(pkgPath, "utf8");
-    const pkg = JSON.parse(pkgRaw) as Partial<{
-      name: string;
-      version: string;
-      description: string;
-    }>;
+    const pkg = JSON.parse(pkgRaw) as PackageConfig;
 
     if (pkg.name) {
-      pkgOutput += `📦 ${t.bold(t.fg("accent", pkg.name))}${pkg.version ? t.fg("dim", ` v${pkg.version}`) : ""}\n`;
+      const versionString = pkg.version
+        ? theme.fg("dim", ` v${pkg.version}`)
+        : "";
+      pkgOutput += `📦 ${theme.bold(theme.fg("accent", pkg.name))}${versionString}\n`;
     }
+
     if (pkg.description) {
-      pkgOutput += `${t.italic(pkg.description)}\n`;
+      pkgOutput += `${theme.italic(pkg.description)}\n`;
     }
   } catch {
-    // Ignore missing or invalid package.json
+    // ENOENT or invalid JSON is expected when no package.json is present
   }
+
   return pkgOutput;
 }
 
 async function buildGitInfo(
   pi: ExtensionAPI,
   cwd: string,
-  t: { fg: (c: any, s: string) => string },
+  theme: ThemeHelper,
 ): Promise<string> {
   let gitOutput = "";
+
   try {
     const branchResult = await pi.exec("git", ["branch", "--show-current"], {
       cwd,
     });
+
     if (branchResult.code !== SUCCESS_EXIT_CODE) {
       return gitOutput;
     }
 
     const branch = branchResult.stdout.trim();
+
     if (branch) {
-      gitOutput += `🌿 ${t.fg("accent", branch)}\n`;
+      gitOutput += `🌿 ${theme.fg("accent", branch)}\n`;
     }
 
     const diffResult = await pi.exec("git", ["diff", "--shortstat"], { cwd });
+
     if (diffResult.code === SUCCESS_EXIT_CODE && diffResult.stdout.trim()) {
-      gitOutput += `📊 ${t.fg("warning", diffResult.stdout.trim())}\n`;
+      gitOutput += `📊 ${theme.fg("warning", diffResult.stdout.trim())}\n`;
     } else {
-      gitOutput += `📊 ${t.fg("success", "Clean working directory")}\n`;
+      gitOutput += `📊 ${theme.fg("success", "Clean working directory")}\n`;
     }
 
     const logResult = await pi.exec(
@@ -119,6 +140,7 @@ async function buildGitInfo(
       ["log", "-n", RECENT_COMMITS_COUNT, "--oneline"],
       { cwd },
     );
+
     if (logResult.code === SUCCESS_EXIT_CODE && logResult.stdout.trim()) {
       gitOutput += "\n📜 Recent Commits:\n";
       gitOutput += logResult.stdout
@@ -126,17 +148,21 @@ async function buildGitInfo(
         .split("\n")
         .map((line) => {
           const spaceIdx = line.indexOf(" ");
+
           if (spaceIdx === NOT_FOUND_INDEX) {
             return `  ${line}`;
           }
-          const hash = line.slice(0, spaceIdx);
-          const msg = line.slice(spaceIdx + 1);
-          return `  ${t.fg("dim", hash)} ${msg}`;
+
+          const commitHash = line.slice(0, spaceIdx);
+          const commitMessage = line.slice(spaceIdx + 1);
+
+          return `  ${theme.fg("dim", commitHash)} ${commitMessage}`;
         })
         .join("\n");
     }
   } catch {
-    // Ignore missing git
+    // Missing git or not a git repository
   }
+
   return gitOutput;
 }
