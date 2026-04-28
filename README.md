@@ -25,9 +25,7 @@ npm install
 - `npm run format` — prettier `--write` over `**/*.{ts,js,cjs,md,json}`
 - `npm run format:file <path>` — prettier `--write` on a single file
 
-## Extensions
-
-### `caveman.ts`
+## `caveman.ts`
 
 Always-on **caveman mode**: prepends the upstream caveman ruleset to the system
 prompt every turn so the model speaks like a smart caveman and burns ~75%
@@ -35,7 +33,7 @@ fewer output tokens. Wraps [JuliusBrussee/caveman](https://github.com/JuliusBrus
 as a pi extension instead of a passive skill — a pi skill would only inject
 its `description`, not the full ruleset, which defeats the purpose.
 
-#### Install
+### Install
 
 First run fetches the upstream repo:
 
@@ -51,7 +49,7 @@ If `SKILL.md` is missing on session start, the extension surfaces a warning
 telling you to run `/caveman update`. Injection is skipped in that state —
 pi keeps working normally.
 
-#### Data layout
+### Data layout
 
 ```
 ~/.pi/agent/caveman/
@@ -63,7 +61,7 @@ pi keeps working normally.
 `state.json` is created with defaults (`{ enabled: true, level: "full" }`) on
 first run. Edit via the `/caveman` command, not by hand.
 
-#### Slash commands
+### Slash commands
 
 | Command                         | Action                                                                           |
 | ------------------------------- | -------------------------------------------------------------------------------- |
@@ -80,7 +78,7 @@ first run. Edit via the `/caveman` command, not by hand.
 Argument completion is wired up — typing `/caveman ` and tabbing cycles
 through the valid tokens above.
 
-#### Hooks
+### Hooks
 
 - `session_start` — loads `SKILL.md` into memory, sets the status bar entry
   (`🪨 caveman <level>` or `🪨 caveman off`), warns if `SKILL.md` is missing.
@@ -89,7 +87,7 @@ through the valid tokens above.
   `event.systemPrompt`. Returns `undefined` (no-op) when disabled or skill
   missing.
 
-#### Switching off mid-session
+### Switching off mid-session
 
 The ruleset itself reserves the phrases **`stop caveman`** and **`normal
 mode`** — say either to the model and it drops caveman style for the
@@ -97,7 +95,7 @@ remainder of the response. The injection itself stays active until you run
 `/caveman off`. To kill it permanently for the session, use the slash
 command.
 
-#### Levels at a glance
+### Levels at a glance
 
 Example — "Why React component re-render?"
 
@@ -108,7 +106,7 @@ Example — "Why React component re-render?"
 - **wenyan-full**: "物出新參照，致重繪。useMemo Wrap之。"
 - **wenyan-ultra**: "新參照→重繪。useMemo Wrap。"
 
-#### Auto-clarity
+### Auto-clarity
 
 The ruleset tells the model to drop caveman style for security warnings,
 irreversible-action confirmations, multi-step sequences where fragment order
@@ -116,7 +114,7 @@ risks misreads, and explicit "clarify / repeat that" requests — then resume
 caveman after the clear part is done. Code, commits, and PR text are always
 written in normal English.
 
-### `welcome-message.ts`
+## `welcome-message.ts`
 
 Displays a custom workspace summary block in the UI at the start of a session.
 
@@ -127,19 +125,19 @@ When pi starts in an interactive UI context (`ctx.hasUI === true`), this extensi
 
 The output uses custom UI components and theme colors (e.g., `customMessageBg`, `toolPendingBg`) for distinct visual sections.
 
-#### Hooks
+### Hooks
 
 - `session_start` — Gathers `package.json` and git data via `pi.exec`, then emits a custom message using `pi.sendMessage`.
 - `registerMessageRenderer("welcome")` — Defines the TUI rendering logic for the custom message type.
 
-### `bash-approval.ts`
+## `bash-approval.ts`
 
 Guards the `bash` tool behind an interactive allow-list. Every bash tool call
 is intercepted; commands matching a configured pattern run silently, anything
 else prompts the user. In non-interactive contexts (`pi -p`, no UI), unknown
 commands are blocked outright with a reason pointing at the config file.
 
-#### Config
+### Config
 
 Lives at `~/.pi/agent/bash-approval.json`. Created with defaults on first run
 (ENOENT → write `{ "allowed": [], "splitChains": true }`). Malformed JSON or
@@ -174,7 +172,7 @@ A chain like `cd foo && git log` only runs unprompted when both `cd foo` and
 command string as one unit. The splitter is a pragmatic shell-ish parser, not
 a full POSIX one — good enough for the commands the agent actually emits.
 
-#### Approval prompt
+### Approval prompt
 
 On a non-matching command in interactive mode, the user picks from:
 
@@ -197,19 +195,75 @@ back to `bash-approval.json` immediately; write failures surface via
 `ctx.ui.notify(..., "error")` and the rule is dropped from the in-memory
 config too.
 
-#### Slash commands
+### Slash commands
 
 | Command                 | Action                                                                          |
 | ----------------------- | ------------------------------------------------------------------------------- |
 | `/bash-approval-reload` | Re-read `~/.pi/agent/bash-approval.json` from disk (use after editing by hand). |
 | `/bash-approval-list`   | Show currently allowed bash patterns.                                           |
 
-#### Hooks
+### Hooks
 
 - `tool_call` — only acts on `bash` tool calls (via `isToolCallEventType`).
   Empty/whitespace commands fall through. Matching commands fall through.
   Non-matching commands either block (no UI) or prompt and apply the user's
   choice.
 
-See [bash-approval.ts](bash-approval.ts) and
-[tests/bash-approval.spec.ts](tests/bash-approval.spec.ts).
+## `user-select.ts`
+
+Registers a `user_select` tool the LLM (or skills) can call to ask the human
+a multiple-choice question. Use whenever a workflow needs explicit user
+input to disambiguate, confirm, or pick between mutually exclusive paths
+instead of guessing.
+
+### Tool schema
+
+| Field         | Type       | Required | Description                                                   |
+| ------------- | ---------- | -------- | ------------------------------------------------------------- |
+| `question`    | `string`   | yes      | The question or prompt shown to the user.                     |
+| `options`     | `Option[]` | yes      | Mutually exclusive choices (`{ label, description? }`, ≥ 1).  |
+| `allowCustom` | `boolean`  | no       | When `true`, append a "(Type custom answer)" free-text entry. |
+
+Example tool call:
+
+```json
+{
+  "question": "Which package manager should I use?",
+  "options": [
+    { "label": "npm" },
+    { "label": "pnpm", "description": "Faster, content-addressable" },
+    { "label": "yarn" }
+  ],
+  "allowCustom": true
+}
+```
+
+### Behavior
+
+- **Interactive UI**: shows the question, numbered options (with optional
+  descriptions rendered inline as `2. pnpm — Faster, content-addressable`),
+  and — when `allowCustom` is true — a final `(Type custom answer)` entry
+  that opens a text input prompt.
+- **Non-interactive** (`pi -p`, JSON mode): throws so the LLM sees an error
+  result and stops looping on a tool that has no human to answer it.
+- **Cancellation** (Esc / null result / whitespace-only custom answer):
+  returns a non-error result with `answer: null` and `cancelled: true`, so
+  the calling skill can react explicitly to the user backing out instead of
+  treating it as a normal answer.
+
+Tool result content is a short, LLM-friendly string:
+
+| Outcome           | `content[0].text`                       |
+| ----------------- | --------------------------------------- |
+| Pre-baked option  | `User selected: <n>. <label>`           |
+| Free-text answer  | `User wrote: <trimmed text>`            |
+| Cancelled         | `User cancelled the selection`          |
+| Empty custom text | `User submitted an empty custom answer` |
+
+`details` exposes the structured form (`question`, `options`, `answer`,
+`wasCustom`, `cancelled`) for renderers and downstream skills.
+
+### Hooks
+
+None. The extension only registers the `user_select` tool; there is no
+config file and no slash commands.
