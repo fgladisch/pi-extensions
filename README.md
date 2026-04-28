@@ -134,5 +134,82 @@ The output uses custom UI components and theme colors (e.g., `customMessageBg`, 
 
 ### `bash-approval.ts`
 
+Guards the `bash` tool behind an interactive allow-list. Every bash tool call
+is intercepted; commands matching a configured pattern run silently, anything
+else prompts the user. In non-interactive contexts (`pi -p`, no UI), unknown
+commands are blocked outright with a reason pointing at the config file.
+
+#### Config
+
+Lives at `~/.pi/agent/bash-approval.json`. Created with defaults on first run
+(ENOENT → write `{ "allowed": [], "splitChains": true }`). Malformed JSON or
+other read errors fall back to the in-memory default — pi keeps working, every
+command just prompts.
+
+```json
+{
+  "allowed": ["ls", "ls:*", "git status:*", "npm test:*"],
+  "splitChains": true
+}
+```
+
+**Pattern syntax** (`allowed[]`):
+
+| Pattern        | Matches                                             |
+| -------------- | --------------------------------------------------- |
+| `ls`           | exact: `ls` only                                    |
+| `ls:*`         | `ls` exactly, or `ls <anything>` (space-separated)  |
+| `git status:*` | `git status` exactly, or `git status <anything>`    |
+| `git*`         | trailing-`*` glob — any command starting with `git` |
+
+The `:*` form is the recommended one: it requires either an exact match or a
+trailing space, so `git status:*` does **not** accidentally match
+`git statusfoo`. The bare-`*` form is a raw prefix match — use sparingly.
+
+**`splitChains`** (default `true`): split incoming commands on shell
+separators (`&&`, `||`, `;`, `|`, newline) — respecting single/double quotes
+and backslash escapes — and require **every** segment to match the allow-list.
+A chain like `cd foo && git log` only runs unprompted when both `cd foo` and
+`git log` resolve to allow-list entries. Set `false` to match the entire
+command string as one unit. The splitter is a pragmatic shell-ish parser, not
+a full POSIX one — good enough for the commands the agent actually emits.
+
+#### Approval prompt
+
+On a non-matching command in interactive mode, the user picks from:
+
+- **Allow once** — run this invocation, persist nothing.
+- **Allow always (exact): `<command>`** — append the literal command to
+  `allowed[]` (truncated to 60 chars in the label only). Hidden when the
+  exact command is already on the list.
+- **Allow always: `<prefix>:*`** — append a suggested prefix rule. Suggestion
+  uses the first two tokens when present (`git status:*`, `npm install:*`,
+  `kubectl get:*`) so subcommand-style tools get a useful default; falls back
+  to the first token alone (`ls:*`). Crucially, the suggestion is derived from
+  the **first failing segment** of a chain, not the head — so
+  `cd /tmp && git log` with only `cd` allow-listed offers `git log:*`, not
+  `cd /tmp:*`. Hidden when the suggested rule equals the exact command or is
+  already on the list.
+- **Deny** — block with reason `Blocked by user`.
+
+Selecting nothing (cancel) is treated as deny. Persisted rules are written
+back to `bash-approval.json` immediately; write failures surface via
+`ctx.ui.notify(..., "error")` and the rule is dropped from the in-memory
+config too.
+
+#### Slash commands
+
+| Command                 | Action                                                                          |
+| ----------------------- | ------------------------------------------------------------------------------- |
+| `/bash-approval-reload` | Re-read `~/.pi/agent/bash-approval.json` from disk (use after editing by hand). |
+| `/bash-approval-list`   | Show currently allowed bash patterns.                                           |
+
+#### Hooks
+
+- `tool_call` — only acts on `bash` tool calls (via `isToolCallEventType`).
+  Empty/whitespace commands fall through. Matching commands fall through.
+  Non-matching commands either block (no UI) or prompt and apply the user's
+  choice.
+
 See [bash-approval.ts](bash-approval.ts) and
 [tests/bash-approval.spec.ts](tests/bash-approval.spec.ts).
