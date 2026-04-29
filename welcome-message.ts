@@ -280,33 +280,31 @@ function formatResourceSection(
 async function discoverExtensions(cwd: string): Promise<string[]> {
   const localExtensions = await discoverLocalExtensions();
   const packageExtensions = discoverConfiguredPackageExtensions(cwd);
-
-  const found = new Set<string>();
-
-  for (const extensionName of localExtensions) {
-    found.add(extensionName);
-  }
-
-  for (const extensionName of packageExtensions) {
-    found.add(extensionName);
-  }
+  const found = new Set([...localExtensions, ...packageExtensions]);
 
   return [...found].sort();
+}
+
+function collectExtensionEntryNames(
+  entries: readonly Dirent[],
+  predicate: (entry: Dirent) => boolean,
+): string[] {
+  return entries
+    .filter(predicate)
+    .filter((entry) => !shouldSkipExtensionEntry(entry.name))
+    .map((entry) => entry.name);
 }
 
 async function discoverLocalExtensions(): Promise<string[]> {
   try {
     const entries = await fs.readdir(EXTENSIONS_DIR, { withFileTypes: true });
-
-    const directoryNames = entries
-      .filter((entry) => entry.isDirectory())
-      .filter((entry) => !shouldSkipExtensionEntry(entry.name))
-      .map((entry) => entry.name);
-
-    const fileNames = entries
-      .filter(isStandaloneExtensionFile)
-      .filter((entry) => !shouldSkipExtensionEntry(entry.name))
-      .map((entry) => entry.name);
+    const directoryNames = collectExtensionEntryNames(entries, (entry) =>
+      entry.isDirectory(),
+    );
+    const fileNames = collectExtensionEntryNames(
+      entries,
+      isStandaloneExtensionFile,
+    );
 
     const directoryExtensions =
       await discoverDirectoryExtensions(directoryNames);
