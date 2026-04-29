@@ -11,6 +11,7 @@ module.exports = {
   },
   collectCoverageFrom: [
     "bash-approval.ts",
+    "caveman.ts",
     "user-select.ts",
     "welcome-message.ts",
   ],

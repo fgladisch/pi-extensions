@@ -44,6 +44,16 @@ const VALID_LEVELS = [
   "wenyan-ultra",
 ] as const;
 
+const DEFAULT_STATE = {
+  enabled: true,
+  level: "full",
+} as const;
+
+const COMMAND_TOKENS = [...VALID_LEVELS, "off", "status", "update"] as const;
+
+const COMPLETION_ITEMS: readonly { value: string; label: string }[] =
+  COMMAND_TOKENS.map((value) => ({ value, label: value }));
+
 type Level = (typeof VALID_LEVELS)[number];
 
 type CavemanState = {
@@ -51,18 +61,42 @@ type CavemanState = {
   readonly level: Level;
 };
 
-const DEFAULT_STATE: CavemanState = {
-  enabled: true,
-  level: "full",
-};
+type Result = { ok: true } | { ok: false; reason: string };
 
-const COMMAND_TOKENS = [...VALID_LEVELS, "off", "status", "update"] as const;
+type Exec = (
+  command: string,
+  args: string[],
+) => Promise<{ code: number; stdout: string; stderr: string }>;
+
+type CavemanUi = {
+  notify: (message: string, level: "info" | "warning" | "error") => void;
+  setStatus: (name: string, value: string) => void;
+};
 
 function isLevel(value: unknown): value is Level {
   return (
     typeof value === "string" &&
     (VALID_LEVELS as readonly string[]).includes(value)
   );
+}
+
+function errnoCode(error: unknown): string | undefined {
+  return error instanceof Error
+    ? (error as NodeJS.ErrnoException).code
+    : undefined;
+}
+
+function writeDefaultStateFile(): void {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(
+      STATE_PATH,
+      `${JSON.stringify(DEFAULT_STATE, null, 2)}\n`,
+      "utf8",
+    );
+  } catch {
+    // Best effort; fall back to in-memory defaults.
+  }
 }
 
 function loadState(): CavemanState {
@@ -75,24 +109,8 @@ function loadState(): CavemanState {
       level: isLevel(parsed.level) ? parsed.level : DEFAULT_STATE.level,
     };
   } catch (error: unknown) {
-    const code =
-      error instanceof Error
-        ? (error as NodeJS.ErrnoException).code
-        : undefined;
-
-    if (code === "ENOENT") {
-      try {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-        fs.writeFileSync(
-          STATE_PATH,
-          `${JSON.stringify(DEFAULT_STATE, null, 2)}\n`,
-          "utf8",
-        );
-      } catch {
-        // Best effort; fall back to in-memory defaults.
-      }
-
-      return { ...DEFAULT_STATE };
+    if (errnoCode(error) === "ENOENT") {
+      writeDefaultStateFile();
     }
 
     return { ...DEFAULT_STATE };
@@ -110,6 +128,47 @@ function loadSkillContent(): string | null {
   } catch {
     // All I/O errors (ENOENT, permission, etc.) have the same recovery: return null.
     return null;
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function persistState(next: CavemanState): Result {
+  try {
+    saveState(next);
+    return { ok: true };
+  } catch (error: unknown) {
+    return {
+      ok: false,
+      reason: `failed to persist state: ${errorMessage(error)}`,
+    };
+  }
+}
+
+async function runGitUpdate(exec: Exec): Promise<Result> {
+  const isClone = !fs.existsSync(path.join(UPSTREAM_DIR, ".git"));
+  const action = isClone ? "clone" : "update";
+  const args = isClone
+    ? ["clone", "--depth", "1", UPSTREAM_REPO, UPSTREAM_DIR]
+    : ["-C", UPSTREAM_DIR, "pull", "--ff-only"];
+
+  try {
+    if (isClone) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+
+    const result = await exec("git", args);
+
+    if (result.code !== 0) {
+      const detail = result.stderr.trim() || result.stdout.trim();
+      return { ok: false, reason: `${action} failed: ${detail}` };
+    }
+
+    return { ok: true };
+  } catch (error: unknown) {
+    return { ok: false, reason: `${action} failed: ${errorMessage(error)}` };
   }
 }
 
@@ -140,6 +199,25 @@ function statusLine(state: CavemanState): string {
 export default function (pi: ExtensionAPI) {
   let state = loadState();
   let skillContent = loadSkillContent();
+  let cachedInjection: string | null = null;
+
+  function applyState(
+    next: CavemanState,
+    successMessage: string,
+    ui: CavemanUi,
+  ): void {
+    const result = persistState(next);
+
+    if (!result.ok) {
+      ui.notify(`caveman: ${result.reason}`, "error");
+      return;
+    }
+
+    state = next;
+    cachedInjection = null;
+    ui.setStatus("caveman", statusLine(state));
+    ui.notify(successMessage, "info");
+  }
 
   pi.on("session_start", (_event, ctx) => {
     if (!skillContent) {
@@ -161,9 +239,10 @@ export default function (pi: ExtensionAPI) {
       return;
     }
 
+    cachedInjection ??= buildSystemPromptInjection(state, skillContent);
+
     return {
-      systemPrompt:
-        event.systemPrompt + buildSystemPromptInjection(state, skillContent),
+      systemPrompt: event.systemPrompt + cachedInjection,
     };
   });
 
@@ -171,107 +250,53 @@ export default function (pi: ExtensionAPI) {
     description:
       "Toggle caveman mode and switch intensity (lite/full/ultra/wenyan-*/off/update)",
     getArgumentCompletions: (prefix) => {
-      const items = COMMAND_TOKENS.map((value) => ({ value, label: value }));
-      const filtered = items.filter(({ value }) => value.startsWith(prefix));
+      const filtered = COMPLETION_ITEMS.filter(({ value }) =>
+        value.startsWith(prefix),
+      );
       return filtered.length > 0 ? filtered : null;
     },
     handler: async (args, ctx) => {
       const { ui } = ctx;
-      const arg = (args ?? "").trim();
+      const arg = (args ?? "").trim() || "status";
 
-      if (!arg || arg === "status") {
+      if (arg === "status") {
         const skillStatus = skillContent ? "loaded" : "MISSING";
         ui.notify(`${statusLine(state)} (SKILL.md ${skillStatus})`, "info");
         return;
       }
 
       if (arg === "off") {
-        state = { ...state, enabled: false };
-
-        try {
-          saveState(state);
-        } catch (error: unknown) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          ui.notify(`caveman: failed to persist state: ${message}`, "error");
-          return;
-        }
-
-        ui.setStatus("caveman", statusLine(state));
-        ui.notify("caveman OFF", "info");
+        applyState({ ...state, enabled: false }, "caveman OFF", ui);
         return;
       }
 
       if (arg === "update") {
         ui.notify("caveman: updating from upstream...", "info");
 
-        try {
-          const hasGitDir = fs.existsSync(path.join(UPSTREAM_DIR, ".git"));
+        const result = await runGitUpdate(pi.exec.bind(pi));
 
-          if (hasGitDir) {
-            const result = await pi.exec("git", [
-              "-C",
-              UPSTREAM_DIR,
-              "pull",
-              "--ff-only",
-            ]);
-
-            if (result.code !== 0) {
-              const stderr = result.stderr.trim() || result.stdout.trim();
-              ui.notify(`caveman: update failed: ${stderr}`, "error");
-              return;
-            }
-          } else {
-            fs.mkdirSync(DATA_DIR, { recursive: true });
-            const result = await pi.exec("git", [
-              "clone",
-              "--depth",
-              "1",
-              UPSTREAM_REPO,
-              UPSTREAM_DIR,
-            ]);
-
-            if (result.code !== 0) {
-              const stderr = result.stderr.trim() || result.stdout.trim();
-              ui.notify(`caveman: clone failed: ${stderr}`, "error");
-              return;
-            }
-          }
-
-          skillContent = loadSkillContent();
-
-          if (!skillContent) {
-            ui.notify(
-              `caveman: updated, but SKILL.md not found at ${SKILL_PATH}`,
-              "warning",
-            );
-            return;
-          }
-
-          ui.notify("caveman: SKILL.md updated", "info");
-        } catch (error: unknown) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          ui.notify(`caveman: update failed: ${message}`, "error");
+        if (!result.ok) {
+          ui.notify(`caveman: ${result.reason}`, "error");
+          return;
         }
 
+        skillContent = loadSkillContent();
+        cachedInjection = null;
+
+        if (!skillContent) {
+          ui.notify(
+            `caveman: updated, but SKILL.md not found at ${SKILL_PATH}`,
+            "warning",
+          );
+          return;
+        }
+
+        ui.notify("caveman: SKILL.md updated", "info");
         return;
       }
 
       if (isLevel(arg)) {
-        state = { enabled: true, level: arg };
-
-        try {
-          saveState(state);
-        } catch (error: unknown) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          ui.notify(`caveman: failed to persist state: ${message}`, "error");
-          return;
-        }
-
-        ui.setStatus("caveman", statusLine(state));
-        ui.notify(`caveman ON (${state.level})`, "info");
+        applyState({ enabled: true, level: arg }, `caveman ON (${arg})`, ui);
         return;
       }
 
