@@ -1,7 +1,22 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import * as fs from "node:fs/promises";
 
-jest.mock("@mariozechner/pi-coding-agent", () => ({}), { virtual: true });
+const mockGetPackages = jest.fn();
+const mockSettingsManagerCreate = jest.fn(() => ({
+  getPackages: mockGetPackages,
+}));
+const mockGetAgentDir = jest.fn(() => "/home/test/.pi/agent");
+
+jest.mock(
+  "@mariozechner/pi-coding-agent",
+  () => ({
+    getAgentDir: mockGetAgentDir,
+    SettingsManager: {
+      create: mockSettingsManagerCreate,
+    },
+  }),
+  { virtual: true },
+);
 
 jest.mock("node:fs/promises", () => ({
   readFile: jest.fn(),
@@ -84,6 +99,12 @@ function makeCtx(hasUI: boolean = true) {
 describe("welcome-message extension", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetAgentDir.mockReturnValue("/home/test/.pi/agent");
+    mockGetPackages.mockReturnValue([]);
+    mockSettingsManagerCreate.mockReturnValue({
+      getPackages: mockGetPackages,
+    });
+
     (fs.readdir as jest.Mock<any>).mockRejectedValue(
       Object.assign(new Error("ENOENT"), { code: "ENOENT" }),
     );
@@ -220,17 +241,13 @@ describe("welcome-message extension", () => {
   it("renders skills, prompts, and extensions sections", async () => {
     const { pi, triggerSessionStart } = setup();
 
-    (fs.readFile as jest.Mock<any>).mockImplementation((p: string) => {
-      if (p.endsWith("settings.json")) {
-        return Promise.resolve(
-          JSON.stringify({
-            packages: ["npm:pi-subagents", "npm:pi-web-access", ""],
-          }),
-        );
-      }
-
-      return Promise.reject(new Error("ENOENT"));
-    });
+    (fs.readFile as jest.Mock<any>).mockRejectedValue(new Error("ENOENT"));
+    mockGetPackages.mockReturnValue([
+      "npm:pi-subagents",
+      { source: "npm:pi-object-package" },
+      "npm:pi-web-access",
+      "",
+    ]);
 
     (fs.readdir as jest.Mock<any>).mockResolvedValue([
       {
@@ -323,7 +340,7 @@ describe("welcome-message extension", () => {
       "**<mdHeading>[Extensions]</mdHeading>**",
     );
     expect(callArgs.content).toContain(
-      "bash-approval.ts, my-extension, pi-subagents, pi-web-access, welcome-message.ts",
+      "bash-approval.ts, my-extension, pi-object-package, pi-subagents, pi-web-access, welcome-message.ts",
     );
     expect(callArgs.content).not.toContain("some-skill.spec.ts");
     expect(callArgs.content).not.toContain("types.d.ts");

@@ -1,19 +1,19 @@
-import type { ExtensionAPI, Theme } from "@mariozechner/pi-coding-agent";
+import {
+  getAgentDir,
+  SettingsManager,
+  type ExtensionAPI,
+  type PackageSource,
+  type Theme,
+} from "@mariozechner/pi-coding-agent";
 import { Box, Text } from "@mariozechner/pi-tui";
+import type { Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
-import * as os from "node:os";
 import * as path from "node:path";
 
-const TEXT_X = 0;
-const TEXT_Y = 0;
-const BOX_WIDTH = 1;
-const BOX_HEIGHT = 1;
 const SUCCESS_EXIT_CODE = 0;
 const RECENT_COMMITS_COUNT = 5;
 
-const PI_AGENT_DIR = path.join(os.homedir(), ".pi", "agent");
-const EXTENSIONS_DIR = path.join(PI_AGENT_DIR, "extensions");
-const SETTINGS_PATH = path.join(PI_AGENT_DIR, "settings.json");
+const EXTENSIONS_DIR = path.join(getAgentDir(), "extensions");
 const NPM_PACKAGE_PREFIX = "npm:";
 const EXTENSION_DIR_BLOCKLIST = new Set([
   "node_modules",
@@ -28,21 +28,18 @@ type PackageConfig = {
   readonly description?: string;
 };
 
+type CommandDescriptor = {
+  readonly name: string;
+  readonly source: string;
+};
+
+type CommandResults = {
+  readonly code: number;
+  readonly stdout: string;
+};
+
 export default function (pi: ExtensionAPI): void {
-  pi.registerMessageRenderer("welcome", (message, _options, theme) => {
-    const text = new Text(
-      typeof message.content === "string" ? message.content : "Welcome",
-      TEXT_X,
-      TEXT_Y,
-    );
-    const box = new Box(BOX_WIDTH, BOX_HEIGHT, (t) =>
-      theme.bg("customMessageBg", t),
-    );
-
-    box.addChild(text);
-
-    return box;
-  });
+  registerWelcomeRenderer(pi);
 
   pi.on("session_start", async (event, ctx) => {
     if (event.reason !== "startup") {
@@ -56,49 +53,78 @@ export default function (pi: ExtensionAPI): void {
     }
 
     const { theme } = ui;
-    const [pkgOutput, gitOutput, resourcesOutput] = await Promise.all([
+    const [packageInfo, gitInfo, resourcesInfo] = await Promise.all([
       buildPackageInfo(cwd, theme),
       buildGitInfo(pi, cwd, theme),
-      buildResourcesInfo(pi, theme),
+      buildResourcesInfo(pi, cwd, theme),
     ]);
 
-    const sections = [pkgOutput, gitOutput, resourcesOutput]
-      .map((section) => section.trim())
-      .filter((section) => section.length > 0);
+    const output = formatWelcomeOutput([packageInfo, gitInfo, resourcesInfo]);
 
-    const output = sections.length > 0 ? `${sections.join("\n\n")}\n` : "";
-
-    if (output.trim()) {
-      pi.sendMessage({
-        customType: "welcome",
-        content: output.trim(),
-        display: true,
-      });
+    if (output === null) {
+      return;
     }
+
+    pi.sendMessage({
+      customType: "welcome",
+      content: output,
+      display: true,
+    });
   });
 }
 
+function registerWelcomeRenderer(pi: ExtensionAPI): void {
+  pi.registerMessageRenderer("welcome", (message, _options, theme) => {
+    const text = new Text(
+      typeof message.content === "string" ? message.content : "Welcome",
+      0,
+      0,
+    );
+    const box = new Box(1, 1, (token) => theme.bg("customMessageBg", token));
+
+    box.addChild(text);
+
+    return box;
+  });
+}
+
+function formatWelcomeOutput(sections: readonly string[]): string | null {
+  const formattedSections = sections
+    .map((section) => section.trim())
+    .filter((section) => section.length > 0);
+
+  if (formattedSections.length === 0) {
+    return null;
+  }
+
+  return formattedSections.join("\n\n");
+}
+
 async function buildPackageInfo(cwd: string, theme: Theme): Promise<string> {
-  let pkgOutput = "";
   const pkgPath = path.join(cwd, "package.json");
 
   try {
     const pkgRaw = await fs.readFile(pkgPath, "utf8");
     const { name, version, description } = JSON.parse(pkgRaw) as PackageConfig;
 
+    const lines: string[] = [];
+
     if (name) {
       const versionString = version ? theme.fg("dim", ` v${version}`) : "";
-      pkgOutput += `📦 ${theme.bold(theme.fg("mdHeading", name))}${versionString}\n`;
+      lines.push(
+        `📦 ${theme.bold(theme.fg("mdHeading", name))}${versionString}`,
+      );
     }
 
     if (description) {
-      pkgOutput += `${theme.italic(description)}\n`;
+      lines.push(theme.italic(description));
     }
+
+    return lines.join("\n");
   } catch {
     // ENOENT or invalid JSON is expected when no package.json is present
+    return "";
   }
-
-  return pkgOutput;
 }
 
 async function buildGitInfo(
@@ -106,10 +132,8 @@ async function buildGitInfo(
   cwd: string,
   theme: Theme,
 ): Promise<string> {
-  let gitOutput = "";
-
   try {
-    const [branchRes, diffRes, logRes] = await Promise.all([
+    const [branchResult, diffResult, logResult] = await Promise.all([
       pi.exec("git", ["branch", "--show-current"], { cwd }),
       pi.exec("git", ["diff", "--shortstat"], { cwd }),
       pi.exec("git", ["log", "-n", String(RECENT_COMMITS_COUNT), "--oneline"], {
@@ -117,65 +141,88 @@ async function buildGitInfo(
       }),
     ]);
 
-    if (branchRes.code !== SUCCESS_EXIT_CODE) {
-      return gitOutput;
+    if (!isSuccess(branchResult)) {
+      return "";
     }
 
-    const branch = branchRes.stdout.trim();
+    const statusLines: string[] = [];
+    const branch = branchResult.stdout.trim();
 
-    if (branch) {
-      gitOutput += `🌿 ${theme.fg("accent", branch)}\n`;
+    if (branch.length > 0) {
+      statusLines.push(`🌿 ${theme.fg("accent", branch)}`);
     }
 
-    if (diffRes.code === SUCCESS_EXIT_CODE && diffRes.stdout.trim()) {
-      gitOutput += `📊 ${theme.fg("warning", diffRes.stdout.trim())}\n`;
-    } else {
-      gitOutput += `📊 ${theme.fg("success", "Clean working directory")}\n`;
+    statusLines.push(formatDiffLine(theme, diffResult));
+
+    let output = statusLines.join("\n");
+
+    const commitSection = formatCommitSection(theme, logResult);
+
+    if (commitSection.length > 0) {
+      output = `${output}\n\n${commitSection}`;
     }
 
-    if (logRes.code === SUCCESS_EXIT_CODE && logRes.stdout.trim()) {
-      gitOutput += "\n📜 Recent Commits:\n";
-      gitOutput += logRes.stdout
-        .trim()
-        .split("\n")
-        .map((line) => {
-          const spaceIdx = line.indexOf(" ");
-
-          if (spaceIdx === -1) {
-            return `  ${line}`;
-          }
-
-          const commitHash = line.slice(0, spaceIdx);
-          const commitMessage = line.slice(spaceIdx + 1);
-
-          return `  ${theme.fg("dim", commitHash)} ${commitMessage}`;
-        })
-        .join("\n");
-    }
+    return output;
   } catch {
     // Missing git or not a git repository
+    return "";
+  }
+}
+
+function isSuccess(result: CommandResults): boolean {
+  return result.code === SUCCESS_EXIT_CODE;
+}
+
+function formatDiffLine(theme: Theme, diffResult: CommandResults): string {
+  const shortStat = diffResult.stdout.trim();
+
+  if (isSuccess(diffResult) && shortStat.length > 0) {
+    return `📊 ${theme.fg("warning", shortStat)}`;
   }
 
-  return gitOutput;
+  return `📊 ${theme.fg("success", "Clean working directory")}`;
+}
+
+function formatCommitSection(theme: Theme, logResult: CommandResults): string {
+  if (!isSuccess(logResult)) {
+    return "";
+  }
+
+  const lines = logResult.stdout
+    .trim()
+    .split("\n")
+    .filter((line) => line.length > 0)
+    .map((line) => `  ${formatCommitLine(theme, line)}`);
+
+  if (lines.length === 0) {
+    return "";
+  }
+
+  return `📜 Recent Commits:\n${lines.join("\n")}`;
+}
+
+function formatCommitLine(theme: Theme, line: string): string {
+  const firstSpaceIndex = line.indexOf(" ");
+
+  if (firstSpaceIndex === -1) {
+    return line;
+  }
+
+  const commitHash = line.slice(0, firstSpaceIndex);
+  const commitMessage = line.slice(firstSpaceIndex + 1);
+
+  return `${theme.fg("dim", commitHash)} ${commitMessage}`;
 }
 
 async function buildResourcesInfo(
   pi: ExtensionAPI,
+  cwd: string,
   theme: Theme,
 ): Promise<string> {
-  const commands = pi.getCommands();
-
-  const skills = commands
-    .filter((command) => command.source === "skill")
-    .map((command) => command.name.replace(/^skill:/, ""))
-    .sort();
-
-  const prompts = commands
-    .filter((command) => command.source === "prompt")
-    .map((command) => command.name)
-    .sort();
-
-  const extensions = await discoverExtensions();
+  const { skills, prompts } = collectCommandResources(
+    pi.getCommands() as CommandDescriptor[],
+  );
+  const extensions = await discoverExtensions(cwd);
 
   const sections: string[] = [];
 
@@ -194,6 +241,32 @@ async function buildResourcesInfo(
   return sections.join("\n\n");
 }
 
+function collectCommandResources(commands: readonly CommandDescriptor[]): {
+  skills: string[];
+  prompts: string[];
+} {
+  const skills: string[] = [];
+  const prompts: string[] = [];
+
+  for (const command of commands) {
+    const { source, name } = command;
+
+    if (source === "skill") {
+      skills.push(name.replace(/^skill:/, ""));
+      continue;
+    }
+
+    if (source === "prompt") {
+      prompts.push(name);
+    }
+  }
+
+  skills.sort();
+  prompts.sort();
+
+  return { skills, prompts };
+}
+
 function formatResourceSection(
   theme: Theme,
   label: string,
@@ -204,68 +277,112 @@ function formatResourceSection(
   return `${header}\n  ${items.join(", ")}`;
 }
 
-async function discoverExtensions(): Promise<string[]> {
+async function discoverExtensions(cwd: string): Promise<string[]> {
+  const localExtensions = await discoverLocalExtensions();
+  const packageExtensions = discoverConfiguredPackageExtensions(cwd);
+
   const found = new Set<string>();
 
-  try {
-    const entries = await fs.readdir(EXTENSIONS_DIR, { withFileTypes: true });
-
-    for (const entry of entries) {
-      if (
-        entry.name.startsWith(".") ||
-        EXTENSION_DIR_BLOCKLIST.has(entry.name)
-      ) {
-        continue;
-      }
-
-      if (entry.isDirectory()) {
-        const indexPath = path.join(EXTENSIONS_DIR, entry.name, "index.ts");
-
-        try {
-          await fs.access(indexPath);
-          found.add(entry.name);
-        } catch {
-          // Directory without an index.ts is not an extension
-        }
-
-        continue;
-      }
-
-      if (
-        entry.isFile() &&
-        entry.name.endsWith(".ts") &&
-        !entry.name.endsWith(".d.ts") &&
-        !entry.name.endsWith(".spec.ts")
-      ) {
-        found.add(entry.name);
-      }
-    }
-  } catch {
-    // Extensions directory missing — nothing to discover locally
+  for (const extensionName of localExtensions) {
+    found.add(extensionName);
   }
 
-  try {
-    const raw = await fs.readFile(SETTINGS_PATH, "utf8");
-    const parsed = JSON.parse(raw) as { packages?: unknown };
-
-    if (Array.isArray(parsed.packages)) {
-      for (const entry of parsed.packages) {
-        if (typeof entry !== "string") {
-          continue;
-        }
-
-        const name = entry.startsWith(NPM_PACKAGE_PREFIX)
-          ? entry.slice(NPM_PACKAGE_PREFIX.length)
-          : entry;
-
-        if (name.length > 0) {
-          found.add(name);
-        }
-      }
-    }
-  } catch {
-    // Settings file missing or invalid JSON — fall back to local discovery only
+  for (const extensionName of packageExtensions) {
+    found.add(extensionName);
   }
 
   return [...found].sort();
+}
+
+async function discoverLocalExtensions(): Promise<string[]> {
+  try {
+    const entries = await fs.readdir(EXTENSIONS_DIR, { withFileTypes: true });
+
+    const directoryNames = entries
+      .filter((entry) => entry.isDirectory())
+      .filter((entry) => !shouldSkipExtensionEntry(entry.name))
+      .map((entry) => entry.name);
+
+    const fileNames = entries
+      .filter(isStandaloneExtensionFile)
+      .filter((entry) => !shouldSkipExtensionEntry(entry.name))
+      .map((entry) => entry.name);
+
+    const directoryExtensions =
+      await discoverDirectoryExtensions(directoryNames);
+
+    return [...fileNames, ...directoryExtensions];
+  } catch {
+    // Extensions directory missing — nothing to discover locally
+    return [];
+  }
+}
+
+function shouldSkipExtensionEntry(name: string): boolean {
+  return name.startsWith(".") || EXTENSION_DIR_BLOCKLIST.has(name);
+}
+
+function isStandaloneExtensionFile(entry: Dirent): boolean {
+  return (
+    entry.isFile() &&
+    entry.name.endsWith(".ts") &&
+    !entry.name.endsWith(".d.ts") &&
+    !entry.name.endsWith(".spec.ts")
+  );
+}
+
+async function discoverDirectoryExtensions(
+  directoryNames: readonly string[],
+): Promise<string[]> {
+  const extensionFlags = await Promise.all(
+    directoryNames.map(async (directoryName) => {
+      const hasIndex = await hasExtensionIndex(directoryName);
+
+      return { directoryName, hasIndex };
+    }),
+  );
+
+  return extensionFlags
+    .filter((entry) => entry.hasIndex)
+    .map((entry) => entry.directoryName);
+}
+
+async function hasExtensionIndex(directoryName: string): Promise<boolean> {
+  const indexPath = path.join(EXTENSIONS_DIR, directoryName, "index.ts");
+
+  try {
+    await fs.access(indexPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function discoverConfiguredPackageExtensions(cwd: string): string[] {
+  try {
+    const packages = SettingsManager.create(cwd).getPackages();
+
+    return packages
+      .map(getPackageExtensionName)
+      .filter((entry): entry is string => entry !== null);
+  } catch {
+    // Settings load can fail (missing/invalid file) — local discovery still works
+    return [];
+  }
+}
+
+function getPackageExtensionName(packageSource: PackageSource): string | null {
+  const source =
+    typeof packageSource === "string" ? packageSource : packageSource.source;
+  const trimmedSource = source.trim();
+
+  if (trimmedSource.length === 0) {
+    return null;
+  }
+
+  const normalizedSource = trimmedSource.startsWith(NPM_PACKAGE_PREFIX)
+    ? trimmedSource.slice(NPM_PACKAGE_PREFIX.length)
+    : trimmedSource;
+
+  return normalizedSource.length > 0 ? normalizedSource : null;
 }
