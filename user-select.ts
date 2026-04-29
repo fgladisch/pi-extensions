@@ -81,6 +81,12 @@ type UserSelectDetails = {
 
 type ExecuteResult = AgentToolResult<UserSelectDetails>;
 
+function wasCancelled(
+  choice: string | null | undefined,
+): choice is null | undefined {
+  return choice === undefined || choice === null;
+}
+
 function formatOptionLabel(option: SelectOption, index: number): string {
   const { label, description } = option;
   const head = `${index + DISPLAY_INDEX_OFFSET}. ${label}`;
@@ -210,7 +216,7 @@ export default function (pi: ExtensionAPI) {
       const displayOptions = buildDisplayOptions(options, allowCustom);
       const choice = await ui.select(question, displayOptions);
 
-      if (choice === undefined || choice === null) {
+      if (wasCancelled(choice)) {
         return cancelledResult(params);
       }
 
