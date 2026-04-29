@@ -246,6 +246,30 @@ export default function (pi: ExtensionAPI) {
     };
   });
 
+  async function updateFromUpstream(ui: CavemanUi): Promise<void> {
+    ui.notify("caveman: updating from upstream...", "info");
+
+    const result = await runGitUpdate(pi.exec.bind(pi));
+
+    if (!result.ok) {
+      ui.notify(`caveman: ${result.reason}`, "error");
+      return;
+    }
+
+    skillContent = loadSkillContent();
+    cachedInjection = null;
+
+    if (!skillContent) {
+      ui.notify(
+        `caveman: updated, but SKILL.md not found at ${SKILL_PATH}`,
+        "warning",
+      );
+      return;
+    }
+
+    ui.notify("caveman: SKILL.md updated", "info");
+  }
+
   pi.registerCommand("caveman", {
     description:
       "Toggle caveman mode and switch intensity (lite/full/ultra/wenyan-*/off/update)",
@@ -259,51 +283,33 @@ export default function (pi: ExtensionAPI) {
       const { ui } = ctx;
       const arg = (args ?? "").trim() || "status";
 
-      if (arg === "status") {
-        const skillStatus = skillContent ? "loaded" : "MISSING";
-        ui.notify(`${statusLine(state)} (SKILL.md ${skillStatus})`, "info");
-        return;
-      }
-
-      if (arg === "off") {
-        applyState({ ...state, enabled: false }, "caveman OFF", ui);
-        return;
-      }
-
-      if (arg === "update") {
-        ui.notify("caveman: updating from upstream...", "info");
-
-        const result = await runGitUpdate(pi.exec.bind(pi));
-
-        if (!result.ok) {
-          ui.notify(`caveman: ${result.reason}`, "error");
+      switch (arg) {
+        case "status": {
+          const skillStatus = skillContent ? "loaded" : "MISSING";
+          ui.notify(`${statusLine(state)} (SKILL.md ${skillStatus})`, "info");
           return;
         }
+        case "off":
+          applyState({ ...state, enabled: false }, "caveman OFF", ui);
+          return;
+        case "update":
+          await updateFromUpstream(ui);
+          return;
+        default:
+          if (isLevel(arg)) {
+            applyState(
+              { enabled: true, level: arg },
+              `caveman ON (${arg})`,
+              ui,
+            );
+            return;
+          }
 
-        skillContent = loadSkillContent();
-        cachedInjection = null;
-
-        if (!skillContent) {
           ui.notify(
-            `caveman: updated, but SKILL.md not found at ${SKILL_PATH}`,
+            `caveman: unknown arg "${arg}". Try one of: ${COMMAND_TOKENS.join(", ")}`,
             "warning",
           );
-          return;
-        }
-
-        ui.notify("caveman: SKILL.md updated", "info");
-        return;
       }
-
-      if (isLevel(arg)) {
-        applyState({ enabled: true, level: arg }, `caveman ON (${arg})`, ui);
-        return;
-      }
-
-      ui.notify(
-        `caveman: unknown arg "${arg}". Try one of: ${COMMAND_TOKENS.join(", ")}`,
-        "warning",
-      );
     },
   });
 }
