@@ -29,24 +29,19 @@
  *     `answer: null` so the LLM can react to the cancellation.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type {
+  AgentToolResult,
+  ExtensionAPI,
+  ExtensionUIContext,
+} from "@mariozechner/pi-coding-agent";
 import { Type, type Static } from "typebox";
 
 const TOOL_NAME = "user_select";
 const CUSTOM_ANSWER_LABEL = "(Type custom answer)";
+const DISPLAY_INDEX_OFFSET = 1;
 
-type SelectOption = {
-  label: string;
-  description?: string;
-};
-
-type UserSelectDetails = {
-  question: string;
-  options: string[];
-  answer: string | null;
-  wasCustom: boolean;
-  cancelled: boolean;
-};
+const CANCELLED_TEXT = "User cancelled the selection";
+const EMPTY_CUSTOM_TEXT = "User submitted an empty custom answer";
 
 const OptionSchema = Type.Object({
   label: Type.String({ description: "Display label for the option" }),
@@ -73,12 +68,22 @@ const UserSelectParamsSchema = Type.Object({
   ),
 });
 
-export type UserSelectInput = Static<typeof UserSelectParamsSchema>;
+type UserSelectInput = Static<typeof UserSelectParamsSchema>;
+type SelectOption = Static<typeof OptionSchema>;
+
+type UserSelectDetails = {
+  question: string;
+  options: string[];
+  answer: string | null;
+  wasCustom: boolean;
+  cancelled: boolean;
+};
+
+type ExecuteResult = AgentToolResult<UserSelectDetails>;
 
 function formatOptionLabel(option: SelectOption, index: number): string {
   const { label, description } = option;
-  // Index displayed as 1-based for the user.
-  const head = `${index + 1}. ${label}`;
+  const head = `${index + DISPLAY_INDEX_OFFSET}. ${label}`;
 
   if (description) {
     return `${head} — ${description}`;
@@ -122,6 +127,58 @@ function makeDetails(
   };
 }
 
+function cancelledResult(
+  params: UserSelectInput,
+  text: string = CANCELLED_TEXT,
+): ExecuteResult {
+  return {
+    content: [{ type: "text", text }],
+    details: makeDetails(params, { answer: null, cancelled: true }),
+  };
+}
+
+async function resolveCustomAnswer(
+  params: UserSelectInput,
+  ui: ExtensionUIContext,
+): Promise<ExecuteResult> {
+  const typed = await ui.input(params.question, "");
+
+  if (typed === undefined || typed === null) {
+    return cancelledResult(params);
+  }
+
+  const trimmed = typed.trim();
+
+  if (!trimmed) {
+    return cancelledResult(params, EMPTY_CUSTOM_TEXT);
+  }
+
+  return {
+    content: [{ type: "text", text: `User wrote: ${trimmed}` }],
+    details: makeDetails(params, { answer: trimmed, wasCustom: true }),
+  };
+}
+
+function resolveSelectedOption(
+  choice: string,
+  displayOptions: string[],
+  options: SelectOption[],
+): { index: number; option: SelectOption } {
+  const index = displayOptions.indexOf(choice);
+  const option = index >= 0 ? options.at(index) : undefined;
+
+  if (!option) {
+    // Should not happen in practice — `ui.select` returns one of the strings
+    // we passed in — but guard explicitly so callers see a useful error
+    // instead of a silent mismatch.
+    throw new Error(
+      `${TOOL_NAME}: select returned an unknown option "${choice}"`,
+    );
+  }
+
+  return { index, option };
+}
+
 export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: TOOL_NAME,
@@ -154,64 +211,27 @@ export default function (pi: ExtensionAPI) {
       const choice = await ui.select(question, displayOptions);
 
       if (choice === undefined || choice === null) {
-        return {
-          content: [{ type: "text", text: "User cancelled the selection" }],
-          details: makeDetails(params, { answer: null, cancelled: true }),
-        };
+        return cancelledResult(params);
       }
 
       if (allowCustom && choice === CUSTOM_ANSWER_LABEL) {
-        const typed = await ui.input(question, "");
-
-        if (typed === undefined || typed === null) {
-          return {
-            content: [{ type: "text", text: "User cancelled the selection" }],
-            details: makeDetails(params, { answer: null, cancelled: true }),
-          };
-        }
-
-        const trimmed = typed.trim();
-
-        if (!trimmed) {
-          return {
-            content: [
-              { type: "text", text: "User submitted an empty custom answer" },
-            ],
-            details: makeDetails(params, { answer: null, cancelled: true }),
-          };
-        }
-
-        return {
-          content: [{ type: "text", text: `User wrote: ${trimmed}` }],
-          details: makeDetails(params, { answer: trimmed, wasCustom: true }),
-        };
+        return resolveCustomAnswer(params, ui);
       }
 
-      const matchedIndex = displayOptions.indexOf(choice);
-      const matchedOption =
-        matchedIndex >= 0 && matchedIndex < options.length
-          ? options.at(matchedIndex)
-          : undefined;
-
-      if (!matchedOption) {
-        // Should not happen in practice — `ui.select` returns one of
-        // the strings we passed in — but guard explicitly so callers see a
-        // useful error instead of a silent mismatch.
-        throw new Error(
-          `${TOOL_NAME}: select returned an unknown option "${choice}"`,
-        );
-      }
-
-      const { label } = matchedOption;
+      const { index, option } = resolveSelectedOption(
+        choice,
+        displayOptions,
+        options,
+      );
 
       return {
         content: [
           {
             type: "text",
-            text: `User selected: ${matchedIndex + 1}. ${label}`,
+            text: `User selected: ${index + DISPLAY_INDEX_OFFSET}. ${option.label}`,
           },
         ],
-        details: makeDetails(params, { answer: label }),
+        details: makeDetails(params, { answer: option.label }),
       };
     },
   });
