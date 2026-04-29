@@ -302,10 +302,20 @@ function suggestPrefixPattern(command: string): string | null {
   return `${firstToken}:*`;
 }
 
-type CommandEvaluation = {
-  allMatch: boolean;
-  failingSegment: string;
-};
+type CommandEvaluation =
+  | { allMatch: true }
+  | { allMatch: false; failingSegment: string };
+
+function firstFailingSegment(
+  segments: readonly string[],
+  rules: readonly string[],
+): string | null {
+  return (
+    segments.find(
+      (segment) => !rules.some((rule) => matchesPattern(segment, rule)),
+    ) ?? null
+  );
+}
 
 function evaluateCommand(
   command: string,
@@ -316,13 +326,14 @@ function evaluateCommand(
     ? splitCommand(command)
     : [trimmedCommand];
 
-  const isMatch = (segment: string) =>
-    config.allowed.some((rule) => matchesPattern(segment, rule));
+  if (segments.length === 0) {
+    return { allMatch: false, failingSegment: trimmedCommand };
+  }
 
-  const allMatch = segments.length > 0 && segments.every(isMatch);
+  const failingSegment = firstFailingSegment(segments, config.allowed);
 
-  if (allMatch) {
-    return { allMatch: true, failingSegment: trimmedCommand };
+  if (!failingSegment) {
+    return { allMatch: true };
   }
 
   // Base the prefix suggestion on the first segment that actually fails so
@@ -330,9 +341,6 @@ function evaluateCommand(
   // this, a chain like `cd /some/path && git log ...` (where only `git log`
   // is missing from the allow-list) would surface a useless
   // `cd /some/path:*` suggestion derived from the head of the chain.
-  const failingSegment =
-    segments.find((segment) => !isMatch(segment)) ?? trimmedCommand;
-
   return { allMatch: false, failingSegment };
 }
 
@@ -451,11 +459,13 @@ export default function (pi: ExtensionAPI) {
       return;
     }
 
-    const { allMatch, failingSegment } = evaluateCommand(command, config);
+    const evaluation = evaluateCommand(command, config);
 
-    if (allMatch) {
+    if (evaluation.allMatch) {
       return;
     }
+
+    const { failingSegment } = evaluation;
 
     if (!ctx.hasUI) {
       return {
