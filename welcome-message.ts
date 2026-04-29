@@ -172,7 +172,7 @@ async function buildResourcesInfo(
 
   const prompts = commands
     .filter((command) => command.source === "prompt")
-    .map((command) => `/${command.name}`)
+    .map((command) => command.name)
     .sort();
 
   const extensions = await discoverExtensions();

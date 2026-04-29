@@ -317,7 +317,7 @@ describe("welcome-message extension", () => {
     expect(callArgs.content).toContain("brainstorming, commit");
     expect(callArgs.content).toContain("**<mdHeading>[Prompts]</mdHeading>**");
     expect(callArgs.content).toContain(
-      "/gather-context-and-clarify, /parallel-review",
+      "gather-context-and-clarify, parallel-review",
     );
     expect(callArgs.content).toContain(
       "**<mdHeading>[Extensions]</mdHeading>**",
