@@ -5,6 +5,8 @@ jest.mock("@mariozechner/pi-coding-agent", () => ({}), { virtual: true });
 
 jest.mock("node:fs/promises", () => ({
   readFile: jest.fn(),
+  readdir: jest.fn(),
+  access: jest.fn(),
 }));
 
 jest.mock(
@@ -43,6 +45,7 @@ function setup() {
     ),
     exec: jest.fn<any>().mockResolvedValue({ code: 1, stdout: "" }),
     sendMessage: jest.fn(),
+    getCommands: jest.fn<any>().mockReturnValue([]),
   };
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -81,6 +84,12 @@ function makeCtx(hasUI: boolean = true) {
 describe("welcome-message extension", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (fs.readdir as jest.Mock<any>).mockRejectedValue(
+      Object.assign(new Error("ENOENT"), { code: "ENOENT" }),
+    );
+    (fs.access as jest.Mock<any>).mockRejectedValue(
+      Object.assign(new Error("ENOENT"), { code: "ENOENT" }),
+    );
   });
 
   it("ignores events that are not startup", async () => {
@@ -206,6 +215,145 @@ describe("welcome-message extension", () => {
     await triggerSessionStart({ reason: "startup" }, makeCtx());
     // Because there is no package json and git fails, output is empty and sendMessage is not called
     expect(pi.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("renders skills, prompts, and extensions sections", async () => {
+    const { pi, triggerSessionStart } = setup();
+
+    (fs.readFile as jest.Mock<any>).mockImplementation((p: string) => {
+      if (p.endsWith("settings.json")) {
+        return Promise.resolve(
+          JSON.stringify({
+            packages: ["npm:pi-subagents", "npm:pi-web-access", ""],
+          }),
+        );
+      }
+
+      return Promise.reject(new Error("ENOENT"));
+    });
+
+    (fs.readdir as jest.Mock<any>).mockResolvedValue([
+      {
+        name: "bash-approval.ts",
+        isDirectory: () => false,
+        isFile: () => true,
+      },
+      {
+        name: "welcome-message.ts",
+        isDirectory: () => false,
+        isFile: () => true,
+      },
+      {
+        name: "some-skill.spec.ts",
+        isDirectory: () => false,
+        isFile: () => true,
+      },
+      { name: "types.d.ts", isDirectory: () => false, isFile: () => true },
+      { name: "node_modules", isDirectory: () => true, isFile: () => false },
+      { name: "tests", isDirectory: () => true, isFile: () => false },
+      { name: ".husky", isDirectory: () => true, isFile: () => false },
+      { name: "my-extension", isDirectory: () => true, isFile: () => false },
+      { name: "empty-dir", isDirectory: () => true, isFile: () => false },
+      { name: "README.md", isDirectory: () => false, isFile: () => true },
+    ]);
+
+    (fs.access as jest.Mock<any>).mockImplementation((p: string) => {
+      if (p.includes("my-extension")) {
+        return Promise.resolve();
+      }
+
+      return Promise.reject(new Error("ENOENT"));
+    });
+
+    pi.getCommands.mockReturnValue([
+      {
+        name: "skill:brainstorming",
+        source: "skill",
+        sourceInfo: {
+          path: "",
+          source: "",
+          scope: "user",
+          origin: "top-level",
+        },
+      },
+      {
+        name: "skill:commit",
+        source: "skill",
+        sourceInfo: {
+          path: "",
+          source: "",
+          scope: "user",
+          origin: "top-level",
+        },
+      },
+      {
+        name: "parallel-review",
+        source: "prompt",
+        sourceInfo: { path: "", source: "", scope: "user", origin: "package" },
+      },
+      {
+        name: "gather-context-and-clarify",
+        source: "prompt",
+        sourceInfo: { path: "", source: "", scope: "user", origin: "package" },
+      },
+      {
+        name: "bash-approval-reload",
+        source: "extension",
+        sourceInfo: {
+          path: "",
+          source: "",
+          scope: "user",
+          origin: "top-level",
+        },
+      },
+    ]);
+
+    await triggerSessionStart({ reason: "startup" }, makeCtx());
+
+    const callArgs = (pi.sendMessage as jest.Mock<any>).mock
+      .calls[0]![0] as any;
+
+    expect(callArgs.content).toContain("**<mdHeading>[Skills]</mdHeading>**");
+    expect(callArgs.content).toContain("brainstorming, commit");
+    expect(callArgs.content).toContain("**<mdHeading>[Prompts]</mdHeading>**");
+    expect(callArgs.content).toContain(
+      "/gather-context-and-clarify, /parallel-review",
+    );
+    expect(callArgs.content).toContain(
+      "**<mdHeading>[Extensions]</mdHeading>**",
+    );
+    expect(callArgs.content).toContain(
+      "bash-approval.ts, my-extension, pi-subagents, pi-web-access, welcome-message.ts",
+    );
+    expect(callArgs.content).not.toContain("some-skill.spec.ts");
+    expect(callArgs.content).not.toContain("types.d.ts");
+    expect(callArgs.content).not.toContain("empty-dir");
+    expect(callArgs.content).not.toContain("node_modules");
+    expect(callArgs.content).not.toContain("bash-approval-reload");
+  });
+
+  it("omits resource sections when no skills, prompts, or extensions exist", async () => {
+    const { pi, triggerSessionStart } = setup();
+
+    (fs.readFile as jest.Mock<any>).mockRejectedValue(new Error("ENOENT"));
+    (pi.exec as jest.Mock<any>).mockImplementation(
+      (cmd: string, args: string[]) => {
+        if (cmd === "git" && args[0] === "branch") {
+          return Promise.resolve({ code: 0, stdout: "main\n" });
+        }
+
+        return Promise.resolve({ code: 1, stdout: "" });
+      },
+    );
+
+    await triggerSessionStart({ reason: "startup" }, makeCtx());
+
+    const callArgs = (pi.sendMessage as jest.Mock<any>).mock
+      .calls[0]![0] as any;
+
+    expect(callArgs.content).not.toContain("[Skills]");
+    expect(callArgs.content).not.toContain("[Prompts]");
+    expect(callArgs.content).not.toContain("[Extensions]");
   });
 
   it("handles git log without space correctly", async () => {
