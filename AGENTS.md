@@ -12,7 +12,7 @@ npm install                    # Install dev dependencies (run once after clone,
 npm run typecheck              # tsc -b over workspace project references
 npm test                       # jest
 npm run test:coverage          # jest with coverage report (HTML in coverage/)
-npm run lint                   # eslint --fix over root shims + packages/*/{extensions,tests}
+npm run lint                   # eslint --fix over packages/*/{extensions,tests}
 npm run lint:file <path>       # eslint --fix on a single file
 npm run format                 # prettier --write over **/*.{ts,js,cjs,md,json,yml,yaml}
 npm run format:file <path>     # prettier --write on a single file
@@ -31,7 +31,6 @@ There is no build step. Pi loads `.ts` extension files directly.
 
 ```
 .
-├── <name>.ts                         # Root shim that re-exports package entry for local auto-discovery
 ├── packages/
 │   ├── pi-<feature>/
 │   │   ├── extensions/
@@ -48,7 +47,7 @@ There is no build step. Pi loads `.ts` extension files directly.
 ├── .eslintrc.js                      # ESLint (legacy config) + @typescript-eslint + prettier integration
 ├── jest.config.cjs                   # Workspace Jest config
 ├── tsconfig.base.json                # Shared TS compiler options
-├── tsconfig.json                     # Root project references + root shim files
+├── tsconfig.json                     # Root project references
 ├── package.json                      # Workspace tooling + npm workspaces config
 └── README.md                         # Workspace overview
 ```
@@ -57,7 +56,7 @@ There is no build step. Pi loads `.ts` extension files directly.
 
 ## Architecture
 
-This repo is a workspace for pi (`@mariozechner/pi-coding-agent`) extension packages. Source-of-truth implementations live in `packages/pi-*/extensions/index.ts`; root `<name>.ts` files are shims for local auto-discovery. Each extension entry exports `(pi: ExtensionAPI) => void` and registers commands/hooks against the `ExtensionAPI`.
+This repo is a workspace for pi (`@mariozechner/pi-coding-agent`) extension packages. Source-of-truth implementations live in `packages/pi-*/extensions/index.ts`. Each extension entry exports `(pi: ExtensionAPI) => void` and registers commands/hooks against the `ExtensionAPI`.
 
 **Extension hooks in use** (see [packages/pi-bash-approval/extensions/index.ts](packages/pi-bash-approval/extensions/index.ts) for the canonical example):
 
@@ -165,7 +164,6 @@ ctx.ui.notify("done", "info"); // floating promise
 
 ### Naming
 
-- Root shims: `<feature>.ts` at workspace root (re-export package entrypoint)
 - Package extension entrypoint: `packages/pi-<feature>/extensions/index.ts`
 - Tests: `packages/pi-<feature>/tests/<feature>.spec.ts` — exactly one spec file per extension package
 - Config files: `~/.pi/agent/<feature>.json`
@@ -431,7 +429,7 @@ const command = String(
 
 ## Writing a New Extension
 
-1. Create `<feature>.ts` at the workspace root (or `<feature>/index.ts` for multi-file extensions).
+1. Create `packages/pi-<feature>/extensions/index.ts` (plus `types.ts` / `utils.ts` as needed).
 2. Default-export `(pi: ExtensionAPI) => void`.
 3. If the extension reads user config, store it under `~/.pi/agent/<feature>.json` and create the file with sensible defaults on first run (ENOENT → write defaults).
 4. Register slash commands via `pi.registerCommand` — at minimum a `<feature>-reload` if the extension is config-driven.
