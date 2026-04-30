@@ -12,6 +12,10 @@ section is empty, no message appears.
 pi install npm:@fgladisch/pi-welcome-message
 ```
 
+## Example
+
+![Welcome message example](./example.png)
+
 ## Summary sections
 
 - **📦 Package** — name, version, and description from `package.json`.
