@@ -14,6 +14,10 @@ pi install npm:@fgladisch/pi-user-select
 
 No config, no slash commands.
 
+## Example
+
+![User select example](./example.png)
+
 ## Tool schema
 
 | Field         | Type       | Required | Description                                                   |
