@@ -216,6 +216,51 @@ describe("user-select extension", () => {
       });
     });
 
+    it("wraps long option descriptions with hanging indentation", async () => {
+      const tool = getTool();
+      const longOptions = [
+        {
+          label: "policy graph",
+          description:
+            "Compile JSON rules into a decision DAG, freeze snapshots per event, and append immutable audit entries for each decision.",
+        },
+      ];
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pickOption: (options) => {
+          captured = options;
+          return options.at(0) ?? null;
+        },
+      });
+
+      await tool.execute(
+        "id",
+        { question: "Pick one", options: longOptions },
+        null,
+        null,
+        ctx,
+      );
+
+      const wrapped = captured.at(0) ?? "";
+      const wrappedLines = wrapped.split("\n");
+
+      expect(wrappedLines.length).toBeGreaterThan(1);
+
+      const firstLine = wrappedLines.at(0) ?? "";
+      const prefixMatch = firstLine.match(/^(1\. policy graph — )/);
+      const prefix = prefixMatch?.at(1);
+
+      expect(prefix).toBeDefined();
+
+      if (!prefix) {
+        throw new Error("Expected wrapped option prefix");
+      }
+
+      for (const line of wrappedLines.slice(1)) {
+        expect(line.startsWith(" ".repeat(prefix.length))).toBe(true);
+      }
+    });
+
     it("does not append a custom-answer entry when allowCustom is omitted", async () => {
       const tool = getTool();
       let captured: string[] = [];
