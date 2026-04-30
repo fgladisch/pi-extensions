@@ -5,9 +5,6 @@ Monorepo for personal Pi extensions.
 This root workspace holds shared tooling. Source-of-truth extension code
 and full documentation live in `packages/`.
 
-> Do **not** add a `pi.extensions` field to root `package.json` — that would
-> override Pi auto-discovery.
-
 ## Packages
 
 - [`@fgladisch/pi-bash-approval`](packages/pi-bash-approval/README.md)
