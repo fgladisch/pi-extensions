@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Box, Text } from "@mariozechner/pi-tui";
 
 import {
   buildLoadedHistoryMessage,
@@ -10,7 +11,11 @@ import {
   recordHistoryEntry,
 } from "./utils";
 
-export default function (pi: ExtensionAPI) {
+const HISTORY_STATUS_MESSAGE_TYPE = "persistent-history-status";
+
+export default function (pi: ExtensionAPI): void {
+  registerHistoryStatusRenderer(pi);
+
   let runtime = createDefaultRuntime();
 
   pi.on("session_start", (_event, ctx) => {
@@ -25,7 +30,7 @@ export default function (pi: ExtensionAPI) {
     };
 
     if (runtime.showStartupMessage) {
-      ctx.ui.notify(buildLoadedHistoryMessage(runtime), "info");
+      sendHistoryStatusMessage(pi, buildLoadedHistoryMessage(runtime));
     }
   });
 
@@ -64,9 +69,9 @@ export default function (pi: ExtensionAPI) {
         lastInjection: injectHistoryIntoFocusedEditor(ctx.ui, runtime.entries),
       };
 
-      ctx.ui.notify(
+      sendHistoryStatusMessage(
+        pi,
         `Reloaded history (${runtime.entries.length} entries, max ${runtime.maxEntries})`,
-        "info",
       );
     },
   });
@@ -74,8 +79,36 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("history-status", {
     description: "Show persistent prompt history status",
     // eslint-disable-next-line @typescript-eslint/require-await -- command API expects Promise<void>
-    handler: async (_args, ctx) => {
-      ctx.ui.notify(buildStatusMessage(runtime), "info");
+    handler: async (_args, _ctx) => {
+      sendHistoryStatusMessage(pi, buildStatusMessage(runtime));
     },
   });
+}
+
+function sendHistoryStatusMessage(pi: ExtensionAPI, message: string): void {
+  pi.sendMessage({
+    customType: HISTORY_STATUS_MESSAGE_TYPE,
+    content: message,
+    display: true,
+  });
+}
+
+function registerHistoryStatusRenderer(pi: ExtensionAPI): void {
+  pi.registerMessageRenderer(
+    HISTORY_STATUS_MESSAGE_TYPE,
+    (message, _options, theme) => {
+      const text = new Text(
+        typeof message.content === "string"
+          ? message.content
+          : "Persistent history status",
+        0,
+        0,
+      );
+      const box = new Box(1, 1, (token) => theme.bg("customMessageBg", token));
+
+      box.addChild(text);
+
+      return box;
+    },
+  );
 }

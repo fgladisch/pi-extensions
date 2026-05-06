@@ -12,6 +12,23 @@ jest.mock(
   { virtual: true },
 );
 
+jest.mock(
+  "@mariozechner/pi-tui",
+  () => ({
+    Box: class Box {
+      addChild = jest.fn();
+    },
+    Text: class Text {
+      constructor(
+        public text: string,
+        public x: number,
+        public y: number,
+      ) {}
+    },
+  }),
+  { virtual: true },
+);
+
 jest.mock("node:fs", () => ({
   readFileSync: jest.fn(),
   writeFileSync: jest.fn(),
@@ -48,6 +65,8 @@ type Recorded = {
   inputHandler: InputHandler | null;
   sessionStartHandler: SessionStartHandler | null;
   commands: Map<string, CommandHandler>;
+  messageRenderers: Map<string, (...args: unknown[]) => unknown>;
+  sendMessage: jest.Mock<(message: unknown) => void>;
   fs: FsMock;
 };
 
@@ -100,6 +119,8 @@ function setup(): Recorded {
     inputHandler: null,
     sessionStartHandler: null,
     commands: new Map(),
+    messageRenderers: new Map(),
+    sendMessage: jest.fn<(message: unknown) => void>(),
     fs,
   };
 
@@ -118,6 +139,12 @@ function setup(): Recorded {
         recorded.commands.set(name, options.handler);
       },
     ),
+    registerMessageRenderer: jest.fn(
+      (name: string, renderer: (...args: unknown[]) => unknown) => {
+        recorded.messageRenderers.set(name, renderer);
+      },
+    ),
+    sendMessage: recorded.sendMessage,
   };
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -152,13 +179,16 @@ function parseJsonlEntries(raw: string): string[] {
 }
 
 describe("persistent-history extension", () => {
-  it("registers handlers and commands", () => {
+  it("registers handlers, commands, and status renderer", () => {
     const recorded = setup();
 
     expect(typeof recorded.inputHandler).toBe("function");
     expect(typeof recorded.sessionStartHandler).toBe("function");
     expect(recorded.commands.has("history-reload")).toBe(true);
     expect(recorded.commands.has("history-status")).toBe(true);
+    expect(recorded.messageRenderers.has("persistent-history-status")).toBe(
+      true,
+    );
   });
 
   it("persists prompt input as JSONL when UI is available", async () => {
@@ -198,12 +228,14 @@ describe("persistent-history extension", () => {
 
     expect(addToHistory).toHaveBeenNthCalledWith(1, "old");
     expect(addToHistory).toHaveBeenNthCalledWith(2, "new");
-    expect(notify).toHaveBeenCalledWith(
-      expect.stringMatching(
+    expect(recorded.sendMessage).toHaveBeenCalledWith({
+      customType: "persistent-history-status",
+      content: expect.stringMatching(
         /^\[Persistent History\] Loaded 2 entries \(max: 250\) since \d{4}\/\d{2}\/\d{2}, \d{2}:\d{2} from \.pi\/input-history\.jsonl\.$/,
       ),
-      "info",
-    );
+      display: true,
+    });
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it("keeps slash commands and skips only consecutive duplicates", async () => {
@@ -279,6 +311,7 @@ describe("persistent-history extension", () => {
 
     await recorded.sessionStartHandler!({ reason: "startup" }, ctx);
 
+    expect(recorded.sendMessage).not.toHaveBeenCalled();
     expect(notify).not.toHaveBeenCalled();
   });
 
@@ -313,13 +346,15 @@ describe("persistent-history extension", () => {
     await recorded.commands.get("history-reload")!("", ctx);
 
     expect(addToHistory).toHaveBeenCalledWith("from-disk");
-    expect(notify).toHaveBeenCalledWith(
-      expect.stringContaining("Reloaded history"),
-      "info",
-    );
+    expect(recorded.sendMessage).toHaveBeenCalledWith({
+      customType: "persistent-history-status",
+      content: expect.stringContaining("Reloaded history"),
+      display: true,
+    });
+    expect(notify).not.toHaveBeenCalled();
   });
 
-  it("status command reports runtime summary", async () => {
+  it("status command reports runtime summary via custom message", async () => {
     const recorded = setup();
     recorded.fs.readFileSync.mockImplementation((filePath: unknown) => {
       if (filePath === GLOBAL_SETTINGS_PATH) {
@@ -333,27 +368,29 @@ describe("persistent-history extension", () => {
       return "";
     });
 
-    const { ctx, notify } = makeCtx();
+    const { ctx } = makeCtx();
 
     await recorded.sessionStartHandler!({ reason: "startup" }, ctx);
     await recorded.commands.get("history-status")!("", ctx);
 
-    const [message, level] = notify.mock.calls.at(-1)!;
-    expect(message).toMatch(
-      /^\[Persistent History\] Loaded 2 entries \(max: 3\) since \d{4}\/\d{2}\/\d{2}, \d{2}:\d{2} from \.pi\/input-history\.jsonl\.$/,
-    );
-    expect(level).toBe("info");
+    expect(recorded.sendMessage).toHaveBeenCalledWith({
+      customType: "persistent-history-status",
+      content: expect.stringMatching(
+        /^\[Persistent History\] Loaded 2 entries \(max: 3\) since \d{4}\/\d{2}\/\d{2}, \d{2}:\d{2} from \.pi\/input-history\.jsonl\.$/,
+      ),
+      display: true,
+    });
   });
 
   it("status keeps one-line summary format when editor has no addToHistory", async () => {
     const recorded = setup();
-    const { ctx, notify } = makeCtx({ focusedEditor: {} });
+    const { ctx } = makeCtx({ focusedEditor: {} });
 
     await recorded.sessionStartHandler!({ reason: "startup" }, ctx);
     await recorded.commands.get("history-status")!("", ctx);
 
-    const [message] = notify.mock.calls.at(-1)!;
-    expect(message).toMatch(
+    const [message] = recorded.sendMessage.mock.calls.at(-1)!;
+    expect((message as { content: string }).content).toMatch(
       /^\[Persistent History\] Loaded 0 entries \(max: 250\) since \d{4}\/\d{2}\/\d{2}, \d{2}:\d{2} from \.pi\/input-history\.jsonl\.$/,
     );
   });
