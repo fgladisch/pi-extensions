@@ -12,6 +12,8 @@ import {
 } from "./utils";
 
 const HISTORY_STATUS_MESSAGE_TYPE = "persistent-history-status";
+const HEADING = "Persistent History";
+const MARKDOWN_HEADING = `[${HEADING}]`;
 
 export default function (pi: ExtensionAPI): void {
   registerHistoryStatusRenderer(pi);
@@ -93,17 +95,28 @@ function sendHistoryStatusMessage(pi: ExtensionAPI, message: string): void {
   });
 }
 
+function styleHeading(content: string, styledHeading: string): string {
+  const lines = content.split("\n");
+  const firstLine = lines.at(0);
+
+  if (firstLine !== MARKDOWN_HEADING) {
+    return content;
+  }
+
+  return [styledHeading, ...lines.slice(1)].join("\n");
+}
+
 function registerHistoryStatusRenderer(pi: ExtensionAPI): void {
   pi.registerMessageRenderer(
     HISTORY_STATUS_MESSAGE_TYPE,
     (message, _options, theme) => {
-      const text = new Text(
+      const styledHeading = theme.bold(theme.fg("mdHeading", `[${HEADING}]`));
+      const content =
         typeof message.content === "string"
-          ? message.content
-          : "Persistent history status",
-        0,
-        0,
-      );
+          ? styleHeading(message.content, styledHeading)
+          : "Persistent history status";
+
+      const text = new Text(content, 0, 0);
       const box = new Box(1, 1, (token) => theme.bg("customMessageBg", token));
 
       box.addChild(text);

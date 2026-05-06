@@ -191,6 +191,37 @@ describe("persistent-history extension", () => {
     );
   });
 
+  it("styles persistent-history heading with mdHeading theme token", () => {
+    const recorded = setup();
+    const renderer = recorded.messageRenderers.get("persistent-history-status");
+
+    const theme = {
+      fg: jest.fn(
+        (token: string, value: string) => `<${token}>${value}</${token}>`,
+      ),
+      bold: jest.fn((value: string) => `**${value}**`),
+    };
+
+    const rendered = renderer?.(
+      {
+        content:
+          "[Persistent History]\n  Loaded 1 entries (max: 250)\n  Since: 2026/05/06, 14:42\n  From file: .pi/input-history.jsonl",
+      },
+      {},
+      theme,
+    ) as { addChild: jest.Mock<(child: unknown) => void> };
+
+    const [text] = rendered.addChild.mock.calls.at(0) ?? [];
+
+    expect((text as { text: string }).text).toMatch(
+      /^\*\*<mdHeading>\[Persistent History\]<\/mdHeading>\*\*\n  Loaded 1 entries \(max: 250\)/,
+    );
+    expect(theme.fg).toHaveBeenCalledWith("mdHeading", "[Persistent History]");
+    expect(theme.bold).toHaveBeenCalledWith(
+      "<mdHeading>[Persistent History]</mdHeading>",
+    );
+  });
+
   it("persists prompt input as JSONL when UI is available", async () => {
     const recorded = setup();
     const { ctx } = makeCtx();

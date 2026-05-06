@@ -1,5 +1,9 @@
 # @fgladisch/pi-persistent-history
 
+## 0.4.1
+
+- Style `[Persistent History]` heading with `theme.bold(theme.fg("mdHeading", `[${HEADING}]`))` in the custom status message renderer.
+
 ## 0.4.0
 
 - Render startup and status output in multiline section format:
