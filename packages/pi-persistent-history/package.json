@@ -1,6 +1,6 @@
 {
   "name": "@fgladisch/pi-persistent-history",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Per-project persistent prompt input history for Pi",
   "keywords": [
     "pi-package"
