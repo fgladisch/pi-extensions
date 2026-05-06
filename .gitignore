@@ -1,5 +1,6 @@
 node_modules/
 coverage/
+.worktrees/
 *.tsbuildinfo
 *.log
 .DS_Store
