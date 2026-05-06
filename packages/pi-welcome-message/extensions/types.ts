@@ -20,6 +20,18 @@ export type CommandResults = {
   readonly stdout: string;
 };
 
+export enum WelcomeSection {
+  NodePackage = "nodePackage",
+  Git = "git",
+  PiResources = "piResources",
+}
+
+export type EnabledWelcomeSections = {
+  readonly nodePackage: boolean;
+  readonly git: boolean;
+  readonly piResources: boolean;
+};
+
 export type WelcomeExtensionAPI = Pick<ExtensionAPI, "exec" | "getCommands">;
 
 export type { PackageSource, Theme };

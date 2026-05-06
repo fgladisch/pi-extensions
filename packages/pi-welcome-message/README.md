@@ -28,4 +28,21 @@ pi install npm:@fgladisch/pi-welcome-message
     `~/.pi/agent/extensions/` plus any `packages` entries from
     `~/.pi/agent/settings.json`.
 
-No config, no slash commands.
+## Configuration (`~/.pi/agent/settings.json`)
+
+Configure which top-level welcome sections are shown through
+`welcomeMessage.sections`.
+
+```json
+{
+  "welcomeMessage": {
+    "sections": ["nodePackage", "git", "piResources"]
+  }
+}
+```
+
+- Allowed section names: `nodePackage`, `git`, `piResources`
+- Default when missing/invalid: all sections enabled
+- Empty array (`[]`): disable all welcome output
+
+No slash commands.

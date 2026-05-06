@@ -6,16 +6,20 @@ import * as path from "node:path";
 import type {
   CommandDescriptor,
   CommandResults,
+  EnabledWelcomeSections,
   PackageConfig,
   PackageSource,
   Theme,
   WelcomeExtensionAPI,
 } from "./types";
+import { WelcomeSection } from "./types";
 
 const SUCCESS_EXIT_CODE = 0;
 const RECENT_COMMITS_COUNT = 5;
 
-const EXTENSIONS_DIR = path.join(getAgentDir(), "extensions");
+const AGENT_DIR = getAgentDir();
+const EXTENSIONS_DIR = path.join(AGENT_DIR, "extensions");
+const SETTINGS_PATH = path.join(AGENT_DIR, "settings.json");
 const NPM_PACKAGE_PREFIX = "npm:";
 const EXTENSION_DIR_BLOCKLIST = new Set([
   "node_modules",
@@ -23,6 +27,20 @@ const EXTENSION_DIR_BLOCKLIST = new Set([
   "coverage",
   "dist",
 ]);
+const KNOWN_WELCOME_SECTIONS = new Set<string>(Object.values(WelcomeSection));
+const DEFAULT_ENABLED_WELCOME_SECTIONS: EnabledWelcomeSections = {
+  nodePackage: true,
+  git: true,
+  piResources: true,
+};
+
+type WelcomeMessageSettings = {
+  sections?: unknown;
+};
+
+type GlobalSettings = {
+  welcomeMessage?: WelcomeMessageSettings;
+};
 
 export function formatWelcomeOutput(
   sections: readonly string[],
@@ -36,6 +54,59 @@ export function formatWelcomeOutput(
   }
 
   return formattedSections.join("\n\n");
+}
+
+function parseGlobalSettings(raw: string): Partial<GlobalSettings> {
+  return JSON.parse(raw) as Partial<GlobalSettings>;
+}
+
+function getWelcomeMessageSettings(
+  settings: Partial<GlobalSettings>,
+): Partial<WelcomeMessageSettings> {
+  const { welcomeMessage } = settings;
+
+  if (!welcomeMessage || typeof welcomeMessage !== "object") {
+    return {};
+  }
+
+  return welcomeMessage;
+}
+
+function isWelcomeSection(value: string): value is WelcomeSection {
+  return KNOWN_WELCOME_SECTIONS.has(value);
+}
+
+function sanitizeEnabledWelcomeSections(
+  sections: unknown,
+): EnabledWelcomeSections {
+  if (!Array.isArray(sections)) {
+    return { ...DEFAULT_ENABLED_WELCOME_SECTIONS };
+  }
+
+  const configuredSections = new Set(
+    sections
+      .filter((entry): entry is string => typeof entry === "string")
+      .map((entry) => entry.trim())
+      .filter((entry): entry is WelcomeSection => isWelcomeSection(entry)),
+  );
+
+  return {
+    nodePackage: configuredSections.has(WelcomeSection.NodePackage),
+    git: configuredSections.has(WelcomeSection.Git),
+    piResources: configuredSections.has(WelcomeSection.PiResources),
+  };
+}
+
+export async function loadEnabledWelcomeSections(): Promise<EnabledWelcomeSections> {
+  try {
+    const rawSettings = await fs.readFile(SETTINGS_PATH, "utf8");
+    const parsedSettings = parseGlobalSettings(rawSettings);
+    const welcomeMessageSettings = getWelcomeMessageSettings(parsedSettings);
+
+    return sanitizeEnabledWelcomeSections(welcomeMessageSettings.sections);
+  } catch {
+    return { ...DEFAULT_ENABLED_WELCOME_SECTIONS };
+  }
 }
 
 export async function buildPackageInfo(

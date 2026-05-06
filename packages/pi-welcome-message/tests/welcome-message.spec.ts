@@ -238,6 +238,65 @@ describe("welcome-message extension", () => {
     expect(pi.sendMessage).not.toHaveBeenCalled();
   });
 
+  it("respects welcomeMessage.sections from settings.json", async () => {
+    const { pi, triggerSessionStart } = setup();
+
+    (fs.readFile as jest.Mock<any>).mockImplementation((filePath: string) => {
+      if (filePath === "/home/test/.pi/agent/settings.json") {
+        return Promise.resolve(
+          JSON.stringify({
+            welcomeMessage: {
+              sections: ["piResources"],
+            },
+          }),
+        );
+      }
+
+      return Promise.reject(new Error("ENOENT"));
+    });
+
+    pi.getCommands.mockReturnValue([
+      {
+        name: "skill:brainstorming",
+        source: "skill",
+      },
+    ]);
+
+    await triggerSessionStart({ reason: "startup" }, makeCtx());
+
+    expect(pi.exec).not.toHaveBeenCalled();
+
+    const callArgs = (pi.sendMessage as jest.Mock<any>).mock
+      .calls[0]![0] as any;
+
+    expect(callArgs.content).toContain("**<mdHeading>[Skills]</mdHeading>**");
+    expect(callArgs.content).not.toContain("📦");
+    expect(callArgs.content).not.toContain("🌿");
+  });
+
+  it("suppresses welcome message when all sections are disabled", async () => {
+    const { pi, triggerSessionStart } = setup();
+
+    (fs.readFile as jest.Mock<any>).mockImplementation((filePath: string) => {
+      if (filePath === "/home/test/.pi/agent/settings.json") {
+        return Promise.resolve(
+          JSON.stringify({
+            welcomeMessage: {
+              sections: [],
+            },
+          }),
+        );
+      }
+
+      return Promise.reject(new Error("ENOENT"));
+    });
+
+    await triggerSessionStart({ reason: "startup" }, makeCtx());
+
+    expect(pi.exec).not.toHaveBeenCalled();
+    expect(pi.sendMessage).not.toHaveBeenCalled();
+  });
+
   it("renders skills, prompts, and extensions sections", async () => {
     const { pi, triggerSessionStart } = setup();
 

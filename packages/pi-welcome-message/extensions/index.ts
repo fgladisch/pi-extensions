@@ -6,6 +6,7 @@ import {
   buildPackageInfo,
   buildResourcesInfo,
   formatWelcomeOutput,
+  loadEnabledWelcomeSections,
 } from "./utils";
 
 export default function (pi: ExtensionAPI): void {
@@ -23,10 +24,15 @@ export default function (pi: ExtensionAPI): void {
     }
 
     const { theme } = ui;
+    const enabledSections = await loadEnabledWelcomeSections();
     const [packageInfo, gitInfo, resourcesInfo] = await Promise.all([
-      buildPackageInfo(cwd, theme),
-      buildGitInfo(pi, cwd, theme),
-      buildResourcesInfo(pi, cwd, theme),
+      enabledSections.nodePackage
+        ? buildPackageInfo(cwd, theme)
+        : Promise.resolve(""),
+      enabledSections.git ? buildGitInfo(pi, cwd, theme) : Promise.resolve(""),
+      enabledSections.piResources
+        ? buildResourcesInfo(pi, cwd, theme)
+        : Promise.resolve(""),
     ]);
 
     const output = formatWelcomeOutput([packageInfo, gitInfo, resourcesInfo]);
