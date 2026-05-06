@@ -1,5 +1,12 @@
 # @fgladisch/pi-persistent-history
 
+## 0.3.0
+
+- Render persistent history startup/reload/status updates as custom messages via `pi.sendMessage` and `registerMessageRenderer`.
+- Preserve existing history behavior while improving status message presentation in the TUI.
+
+_Changes based on: `6996b76`._
+
 ## 0.2.0
 
 - Switch project history storage to JSONL at `<project>/.pi/input-history.jsonl` with one entry per line.
