@@ -4,6 +4,7 @@
     { "path": "./packages/pi-bash-approval" },
     { "path": "./packages/pi-caveman" },
     { "path": "./packages/pi-user-select" },
-    { "path": "./packages/pi-welcome-message" }
+    { "path": "./packages/pi-welcome-message" },
+    { "path": "./packages/pi-persistent-history" }
   ]
 }
