@@ -25,26 +25,28 @@ npm run changeset:publish      # publish packages from changesets
 
 There is no build step. Pi loads `.ts` extension files directly.
 
-## Release Workflow (Changesets + CI)
+## Release Workflow (Changesets + CI + npm Trusted Publisher)
 
-Releases are CI-driven from `.github/workflows/release.yml` on pushes to `main`.
+Releases are CI-driven from `.github/workflows/release.yml` on pushes to `main`. npm authentication uses Trusted Publisher/OIDC, so no npm automation token is required.
 
 1. Add a changeset (`npm run changeset`) for every publishable package change.
 2. Always update `packages/<package>/CHANGELOG.md` before releasing a new version.
 3. Commit and push to `main`.
 4. CI runs `lint`, `typecheck`, `test`, then `changesets/action`.
 5. `changesets/action` opens/updates a release PR (`chore: release packages`).
-6. Merge that release PR to trigger publish with `npm run changeset:publish`.
+6. Merge that release PR to trigger publish with `npm run changeset:publish` through Trusted Publisher.
 
-### Required GitHub settings
+### Required GitHub and npm settings
 
 - Actions workflow permissions: **Read and write permissions**.
 - Enable: **Allow GitHub Actions to create and approve pull requests**.
-- `NPM_TOKEN` repository secret present.
+- Release workflow permissions include `id-token: write`.
+- Each npm package is configured with Trusted Publisher for this GitHub repository and `.github/workflows/release.yml`.
 
 ### Release caveats
 
 - Do not manually bump package versions for normal releases; let changesets own versioning.
+- Do not add an `NPM_TOKEN` secret for publishing; Trusted Publisher handles npm authentication.
 - If CI fails with `ENOENT .../packages/<pkg>/CHANGELOG.md`, add `CHANGELOG.md` in that package.
 
 **Pre-commit hook** (`.husky/pre-commit`) runs `npx lint-staged && npm run typecheck && npm test`. For staged `.ts` files lint-staged runs `organize-imports-cli` (sorts/removes unused imports via the TS language service) and then `eslint --fix`; for staged `.{ts,js,cjs,md,json}` files it runs `prettier --write` (see `lint-staged` config in [package.json](package.json)).
