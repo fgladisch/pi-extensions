@@ -1,5 +1,12 @@
 # @fgladisch/pi-bash-approval
 
+## 0.2.1
+
+- Ignore shell condition-test segments (`[ ... ]`, `[[ ... ]]`, `test ...`) during approval matching so prompts no longer suggest invalid rules like `[ -f:*`.
+- Move extension settings/split parser types from `extensions/utils.ts` to `extensions/types.ts` for clearer type ownership.
+
+_Changes based on: `8c62ec9`._
+
 ## 0.2.0
 
 - Migrate configuration to `~/.pi/agent/.bash-approval` (rules) and `~/.pi/agent/settings.json` (`bashApproval.splitChains`) instead of `bash-approval.json`.

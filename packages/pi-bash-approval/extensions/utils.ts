@@ -5,8 +5,11 @@ import * as path from "node:path";
 import type {
   ApprovalCtx,
   BashApprovalConfig,
+  BashApprovalSettings,
   CommandEvaluation,
+  GlobalSettings,
   PromptOptions,
+  SplitState,
 } from "./types";
 
 const CONFIG_DIR = path.join(os.homedir(), ".pi", "agent");
@@ -56,13 +59,7 @@ const STRIPPABLE_CONTROL_HEADS = new Set([
   ")",
 ]);
 
-type BashApprovalSettings = {
-  splitChains?: unknown;
-};
-
-type GlobalSettings = {
-  bashApproval?: BashApprovalSettings;
-};
+const CONDITION_TEST_HEADS = new Set(["[", "[[", "test"]);
 
 function truncateForLabel(value: string, maxLength: number): string {
   if (value.length <= maxLength) {
@@ -196,12 +193,6 @@ function matchesPattern(command: string, pattern: string): boolean {
   return trimmedCommand === trimmedPattern;
 }
 
-type SplitState = {
-  current: string;
-  parts: string[];
-  quote: '"' | "'" | null;
-};
-
 function isDoubleSeparator(
   char: string,
   nextChar: string | undefined,
@@ -291,6 +282,14 @@ function isVariableAssignmentToken(token: string): boolean {
   return VARIABLE_ASSIGNMENT_PATTERN.test(token);
 }
 
+function isConditionTestHead(token: string | undefined): boolean {
+  if (!token) {
+    return false;
+  }
+
+  return CONDITION_TEST_HEADS.has(token);
+}
+
 function normalizeCommandSegment(segment: string): string | null {
   let tokens = tokenizeSegment(segment);
 
@@ -317,6 +316,10 @@ function normalizeCommandSegment(segment: string): string | null {
   }
 
   if (tokens.length === 0) {
+    return null;
+  }
+
+  if (isConditionTestHead(tokens.at(0))) {
     return null;
   }
 

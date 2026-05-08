@@ -473,6 +473,32 @@ describe("bash-approval extension", () => {
       expect(result).toBeUndefined();
     });
 
+    it("ignores bracket test conditions and evaluates only inner commands", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "echo:*\n",
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent("if [ -f x ]; then echo ok; fi"),
+        makeCtx().ctx,
+      );
+
+      expect(result).toBeUndefined();
+    });
+
+    it("ignores standalone bracket test segments in chains", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "echo:*\n",
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent("[ -f x ] && echo ok"),
+        makeCtx().ctx,
+      );
+
+      expect(result).toBeUndefined();
+    });
+
     it("ignores for/do/done scaffolding and evaluates inner command", async () => {
       const { toolCallHandler } = setup({
         allowListFile: "echo:*\n",
@@ -674,6 +700,23 @@ describe("bash-approval extension", () => {
 
       expect(captured).toContain("Allow always: git log:*");
       expect(captured).not.toContain("Allow always: cd /Users/felix/code/x:*");
+    });
+
+    it("does not suggest bracket-test prefixes from if conditions", async () => {
+      const { toolCallHandler } = setup({ configFile: '{"allowed":[]}' });
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pick: (options) => {
+          captured = options;
+
+          return "Deny";
+        },
+      });
+
+      await toolCallHandler!(bashEvent("if [ -f x ]; then echo ok; fi"), ctx);
+
+      expect(captured).toContain("Allow always: echo ok:*");
+      expect(captured).not.toContain("Allow always: [ -f:*");
     });
 
     it("persists the failing-segment prefix when user accepts it", async () => {
