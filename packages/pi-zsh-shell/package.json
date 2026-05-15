@@ -1,0 +1,23 @@
+{
+  "name": "@fgladisch/pi-zsh-shell",
+  "version": "0.1.0",
+  "description": "Run Pi user bash commands through zsh with Pi-specific functions",
+  "keywords": [
+    "pi-package"
+  ],
+  "license": "MIT",
+  "files": [
+    "extensions",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fgladisch/pi-extensions.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
