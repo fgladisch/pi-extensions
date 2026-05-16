@@ -1,6 +1,8 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Box, Text } from "@mariozechner/pi-tui";
 
+import type { WelcomeMessageHeader } from "./types";
+import { WelcomeLogoColor } from "./types";
 import {
   buildGitInfo,
   buildPackageInfo,
@@ -52,34 +54,86 @@ export default function (pi: ExtensionAPI): void {
       return;
     }
 
-    const headerOutput = welcomeConfig.showLogo
-      ? buildWelcomeHeader(model?.id ?? "no model selected")
-      : "";
-    const output = formatWelcomeOutput([headerOutput, summaryOutput]);
-
-    if (output === null) {
-      return;
-    }
-
     pi.sendMessage({
       customType: "welcome",
-      content: output,
+      content: summaryOutput,
       display: true,
+      details: {
+        header: welcomeConfig.showLogo
+          ? {
+              modelId: model?.id ?? "no model selected",
+              logoColor: welcomeConfig.logoColor,
+            }
+          : null,
+      },
     });
   });
 }
 
 function registerWelcomeRenderer(pi: ExtensionAPI): void {
-  pi.registerMessageRenderer("welcome", (message, _options, theme) => {
-    const text = new Text(
-      typeof message.content === "string" ? message.content : "Welcome",
-      0,
-      0,
+  pi.registerMessageRenderer("welcome", (message, _options, _theme) => {
+    const text = new RenderWidthWelcomeText(
+      parseWelcomeSummary(message.content),
+      parseWelcomeHeader(message.details),
     );
-    const box = new Box(1, 1, (token) => theme.bg("customMessageBg", token));
+    const box = new Box(1, 1, (token) => token);
 
     box.addChild(text);
 
     return box;
   });
+}
+
+function parseWelcomeSummary(content: unknown): string {
+  return typeof content === "string" ? content : "Welcome";
+}
+
+function parseWelcomeHeader(details: unknown): WelcomeMessageHeader | null {
+  if (!details || typeof details !== "object") {
+    return null;
+  }
+
+  const { header } = details as { readonly header?: unknown };
+
+  if (!header || typeof header !== "object") {
+    return null;
+  }
+
+  const candidate = header as Partial<WelcomeMessageHeader>;
+
+  if (
+    typeof candidate.modelId !== "string" ||
+    typeof candidate.logoColor !== "string" ||
+    !isWelcomeLogoColor(candidate.logoColor)
+  ) {
+    return null;
+  }
+
+  return {
+    modelId: candidate.modelId,
+    logoColor: candidate.logoColor,
+  };
+}
+
+function isWelcomeLogoColor(value: string): value is WelcomeLogoColor {
+  return Object.values(WelcomeLogoColor).includes(value as WelcomeLogoColor);
+}
+
+class RenderWidthWelcomeText extends Text {
+  constructor(
+    private readonly summary: string,
+    private readonly header: WelcomeMessageHeader | null,
+  ) {
+    super("", 0, 0);
+  }
+
+  override render(width: number): string[] {
+    const headerOutput = this.header
+      ? buildWelcomeHeader(this.header.modelId, this.header.logoColor, width)
+      : "";
+    const output =
+      formatWelcomeOutput([headerOutput, this.summary]) ?? "Welcome";
+
+    return output.split("\n");
+  }
 }

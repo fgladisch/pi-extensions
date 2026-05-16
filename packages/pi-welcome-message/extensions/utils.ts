@@ -13,11 +13,32 @@ import type {
   WelcomeExtensionAPI,
   WelcomeMessageConfig,
 } from "./types";
-import { WelcomeSection } from "./types";
+import { WelcomeLogoColor, WelcomeSection } from "./types";
 
 const SUCCESS_EXIT_CODE = 0;
 const RECENT_COMMITS_COUNT = 5;
-const WELCOME_HEADER_WIDTH = 48;
+const DEFAULT_WELCOME_HEADER_WIDTH = 48;
+const RESET = "\x1b[0m";
+const BOLD = "\x1b[1m";
+const DEEP_BLUE: Rgb = [22, 83, 189];
+const BLUE: Rgb = [48, 129, 247];
+const SKY: Rgb = [93, 171, 255];
+const ICE: Rgb = [151, 205, 255];
+const DEEP_ORANGE: Rgb = [255, 92, 0];
+const ORANGE: Rgb = [255, 132, 38];
+const AMBER: Rgb = [255, 186, 73];
+const PEACH: Rgb = [255, 214, 153];
+const DEEP_GREEN: Rgb = [22, 163, 74];
+const GREEN: Rgb = [34, 197, 94];
+const MINT: Rgb = [134, 239, 172];
+const ICE_GREEN: Rgb = [187, 247, 208];
+const HEADER_GRADIENT_PALETTES: Record<WelcomeLogoColor, readonly Rgb[]> = {
+  [WelcomeLogoColor.Blue]: [DEEP_BLUE, BLUE, SKY, ICE, SKY, BLUE],
+  [WelcomeLogoColor.Orange]: [DEEP_ORANGE, ORANGE, AMBER, PEACH, AMBER, ORANGE],
+  [WelcomeLogoColor.Green]: [DEEP_GREEN, GREEN, MINT, ICE_GREEN, MINT, GREEN],
+};
+const HEADER_GRADIENT_ROW_PHASE_STEP = 0.045;
+const HEADER_MODEL_PHASE = 0.18;
 const PI_LOGO_LINES = [
   "  ██████╗  ██╗ ",
   "  ██╔══██╗ ██║ ",
@@ -45,26 +66,41 @@ const DEFAULT_ENABLED_WELCOME_SECTIONS: EnabledWelcomeSections = {
 };
 const DEFAULT_SHOW_LOGO = true;
 const DEFAULT_SHOW_ON_NEW_SESSION = true;
+const DEFAULT_LOGO_COLOR = WelcomeLogoColor.Orange;
+
+type Rgb = readonly [number, number, number];
 
 type WelcomeMessageSettings = {
   sections?: unknown;
   showLogo?: unknown;
   showOnNewSession?: unknown;
+  logoColor?: unknown;
 };
 
 type GlobalSettings = {
   welcomeMessage?: WelcomeMessageSettings;
 };
 
-export function buildWelcomeHeader(modelId: string): string {
-  return [
-    "",
-    "",
-    ...PI_LOGO_LINES.map((line) => centerLine(line, WELCOME_HEADER_WIDTH)),
-    centerLine(modelId, WELCOME_HEADER_WIDTH),
-    "",
-    "",
-  ].join("\n");
+export function buildWelcomeHeader(
+  modelId: string,
+  logoColor: WelcomeLogoColor,
+  width: number = DEFAULT_WELCOME_HEADER_WIDTH,
+): string {
+  const palette = HEADER_GRADIENT_PALETTES[logoColor];
+  const logoLines = PI_LOGO_LINES.map((line, row) =>
+    gradientText(
+      centerLine(line, width),
+      row * HEADER_GRADIENT_ROW_PHASE_STEP,
+      palette,
+    ),
+  );
+  const modelLine = `${BOLD}${gradientText(
+    centerLine(modelId, width),
+    HEADER_MODEL_PHASE,
+    palette,
+  )}${RESET}`;
+
+  return ["", ...logoLines, modelLine, ""].join("\n");
 }
 
 export function formatWelcomeOutput(
@@ -79,6 +115,49 @@ export function formatWelcomeOutput(
   }
 
   return formattedSections.join("\n\n");
+}
+
+function mix(start: number, end: number, ratio: number): number {
+  return Math.round(start + (end - start) * ratio);
+}
+
+function sampleGradient(position: number, palette: readonly Rgb[]): Rgb {
+  const wrapped = ((position % 1) + 1) % 1;
+  const scaled = wrapped * palette.length;
+  const index = Math.floor(scaled);
+  const nextIndex = (index + 1) % palette.length;
+  const ratio = scaled - index;
+  const start = palette.at(index) ?? DEEP_ORANGE;
+  const end = palette.at(nextIndex) ?? DEEP_ORANGE;
+
+  return [
+    mix(start.at(0) ?? 0, end.at(0) ?? 0, ratio),
+    mix(start.at(1) ?? 0, end.at(1) ?? 0, ratio),
+    mix(start.at(2) ?? 0, end.at(2) ?? 0, ratio),
+  ];
+}
+
+function foreground([red, green, blue]: Rgb, text: string): string {
+  return `\x1b[38;2;${red};${green};${blue}m${text}${RESET}`;
+}
+
+function gradientText(
+  text: string,
+  phase: number,
+  palette: readonly Rgb[],
+): string {
+  const chars = [...text];
+  const span = Math.max(chars.length - 1, 1);
+
+  return chars
+    .map((char, index) => {
+      if (char === " ") {
+        return char;
+      }
+
+      return foreground(sampleGradient(index / span + phase, palette), char);
+    })
+    .join("");
 }
 
 function centerLine(text: string, width: number): string {
@@ -143,6 +222,24 @@ function sanitizeBooleanSetting(
   return value;
 }
 
+function sanitizeLogoColor(value: unknown): WelcomeLogoColor {
+  if (typeof value !== "string") {
+    return DEFAULT_LOGO_COLOR;
+  }
+
+  const trimmedValue = value.trim();
+
+  if (isLogoColor(trimmedValue)) {
+    return trimmedValue;
+  }
+
+  return DEFAULT_LOGO_COLOR;
+}
+
+function isLogoColor(value: string): value is WelcomeLogoColor {
+  return Object.values(WelcomeLogoColor).includes(value as WelcomeLogoColor);
+}
+
 export async function loadWelcomeMessageConfig(): Promise<WelcomeMessageConfig> {
   try {
     const rawSettings = await fs.readFile(SETTINGS_PATH, "utf8");
@@ -159,12 +256,14 @@ export async function loadWelcomeMessageConfig(): Promise<WelcomeMessageConfig> 
         welcomeMessageSettings.showOnNewSession,
         DEFAULT_SHOW_ON_NEW_SESSION,
       ),
+      logoColor: sanitizeLogoColor(welcomeMessageSettings.logoColor),
     };
   } catch {
     return {
       sections: { ...DEFAULT_ENABLED_WELCOME_SECTIONS },
       showLogo: DEFAULT_SHOW_LOGO,
       showOnNewSession: DEFAULT_SHOW_ON_NEW_SESSION,
+      logoColor: DEFAULT_LOGO_COLOR,
     };
   }
 }

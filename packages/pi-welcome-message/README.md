@@ -4,7 +4,8 @@ Shows workspace summary in UI when session starts.
 
 Runs on real startup and new sessions (`/new`) in interactive UI. Forks and
 headless (`pi -p`) runs are silent. Sections with nothing to show are dropped;
-if every section is empty, no message appears.
+if every section is empty, no message appears. The welcome message renders
+without a custom background and can show a centered gradient Pi logo header.
 
 ## Install
 
@@ -37,7 +38,8 @@ Configure the welcome message through `welcomeMessage`.
   "welcomeMessage": {
     "sections": ["nodePackage", "git", "piResources"],
     "showLogo": true,
-    "showOnNewSession": true
+    "showOnNewSession": true,
+    "logoColor": "orange"
   }
 }
 ```
@@ -46,8 +48,11 @@ Configure the welcome message through `welcomeMessage`.
   - Allowed section names: `nodePackage`, `git`, `piResources`
   - Default when missing/invalid: all sections enabled
   - Empty array (`[]`): disable all welcome output
-- `showLogo`: show the Pi logo, model line, and surrounding header margin.
-  Defaults to `true`.
+- `showLogo`: show the centered gradient Pi logo, model line, and surrounding
+  header margin. Defaults to `true`.
 - `showOnNewSession`: show the welcome message after `/new`. Defaults to `true`.
+- `logoColor`: choose the gradient color family for the Pi logo header.
+  - Allowed values: `orange`, `blue`, `green`
+  - Default when missing/invalid: `orange`
 
 No slash commands.

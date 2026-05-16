@@ -20,6 +20,12 @@ export type CommandResults = {
   readonly stdout: string;
 };
 
+export enum WelcomeLogoColor {
+  Blue = "blue",
+  Orange = "orange",
+  Green = "green",
+}
+
 export enum WelcomeSection {
   NodePackage = "nodePackage",
   Git = "git",
@@ -36,6 +42,12 @@ export type WelcomeMessageConfig = {
   readonly sections: EnabledWelcomeSections;
   readonly showLogo: boolean;
   readonly showOnNewSession: boolean;
+  readonly logoColor: WelcomeLogoColor;
+};
+
+export type WelcomeMessageHeader = {
+  readonly modelId: string;
+  readonly logoColor: WelcomeLogoColor;
 };
 
 export type WelcomeExtensionAPI = Pick<ExtensionAPI, "exec" | "getCommands">;
