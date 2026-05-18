@@ -719,6 +719,32 @@ describe("bash-approval extension", () => {
       expect(captured).not.toContain("Allow always: [ -f:*");
     });
 
+    it("does not suggest redirection-only prefixes from shell groups", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "git rev-parse:*\ngit diff:*\ntrue\n",
+      });
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pick: (options) => {
+          captured = options;
+
+          return "Deny";
+        },
+      });
+
+      await toolCallHandler!(
+        bashEvent(
+          'git rev-parse HEAD && { git diff; for f in $(git ls-files --others --exclude-standard); do git diff --no-index -- /dev/null "$f" || true; done; } > /tmp/pi-footer-review-diff.txt && wc -l /tmp/pi-footer-review-diff.txt',
+        ),
+        ctx,
+      );
+
+      expect(captured).toContain("Allow always: wc -l:*");
+      expect(captured).not.toContain(
+        "Allow always: > /tmp/pi-footer-review-diff.txt:*",
+      );
+    });
+
     it("persists the failing-segment prefix when user accepts it", async () => {
       const { toolCallHandler, fs } = setup({
         configFile: JSON.stringify({ allowed: ["cd:*", "head:*"] }),

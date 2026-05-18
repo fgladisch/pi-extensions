@@ -76,6 +76,7 @@ approval checks focus on actual commands:
   `fi`, `while`, `until`, `case`, `esac`, `function`
 - condition tests (`[ ... ]`, `[[ ... ]]`, `test ...`) are ignored
 - assignment-only segments like `FOO=bar` are ignored
+- redirection-only segments like `> /tmp/out` after shell groups are ignored
 - assignment prefixes before commands are stripped
   (for example: `FOO=bar npm test` evaluates as `npm test`)
 

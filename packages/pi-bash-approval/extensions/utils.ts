@@ -31,6 +31,8 @@ export const BLOCKED_BY_USER = "Blocked by user";
 
 const COMMENT_PREFIX = "#";
 const VARIABLE_ASSIGNMENT_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const REDIRECTION_OPERATOR_PATTERN =
+  /^(?:\d*)?(?:<|>|>>|<>|>&|<&|<<|<<<|&>|&>>)$/;
 
 const DECLARATION_ONLY_HEADS = new Set([
   "for",
@@ -290,6 +292,14 @@ function isConditionTestHead(token: string | undefined): boolean {
   return CONDITION_TEST_HEADS.has(token);
 }
 
+function isRedirectionOperatorToken(token: string | undefined): boolean {
+  if (!token) {
+    return false;
+  }
+
+  return REDIRECTION_OPERATOR_PATTERN.test(token);
+}
+
 function normalizeCommandSegment(segment: string): string | null {
   let tokens = tokenizeSegment(segment);
 
@@ -320,6 +330,10 @@ function normalizeCommandSegment(segment: string): string | null {
   }
 
   if (isConditionTestHead(tokens.at(0))) {
+    return null;
+  }
+
+  if (isRedirectionOperatorToken(tokens.at(0))) {
     return null;
   }
 
