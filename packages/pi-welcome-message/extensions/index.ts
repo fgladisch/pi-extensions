@@ -1,5 +1,10 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import {
+  Box,
+  Text,
+  truncateToWidth,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
 
 import type { WelcomeMessageHeader } from "./types";
 import { WelcomeLogoColor } from "./types";

@@ -2,7 +2,7 @@ import type {
   ExtensionAPI,
   PackageSource,
   Theme,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 
 export type PackageConfig = {
   readonly name?: string;

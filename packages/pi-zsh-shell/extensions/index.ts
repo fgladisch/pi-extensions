@@ -1,7 +1,7 @@
 import {
   createLocalBashOperations,
   type ExtensionAPI,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import * as os from "node:os";
 import * as path from "node:path";
 import { basename } from "node:path";

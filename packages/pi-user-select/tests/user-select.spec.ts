@@ -8,10 +8,10 @@
 
 import { describe, expect, it, jest } from "@jest/globals";
 
-// `virtual: true` because @mariozechner/pi-coding-agent is ESM-only — Jest's
+// `virtual: true` because @earendil-works/pi-coding-agent is ESM-only — Jest's
 // CJS resolver can't load it. Stub only what user-select.ts imports
 // (which is only the `ExtensionAPI` type, plus the runtime export).
-jest.mock("@mariozechner/pi-coding-agent", () => ({}), { virtual: true });
+jest.mock("@earendil-works/pi-coding-agent", () => ({}), { virtual: true });
 
 // `typebox` is also ESM-only. We don't actually validate against the schema
 // in these tests, so stub each builder as a no-op that returns a plain

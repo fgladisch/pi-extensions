@@ -10,10 +10,10 @@ import { describe, expect, it, jest } from "@jest/globals";
 import * as os from "node:os";
 import * as path from "node:path";
 
-// `virtual: true` because @mariozechner/pi-coding-agent is ESM-only — Jest's
+// `virtual: true` because @earendil-works/pi-coding-agent is ESM-only — Jest's
 // CJS resolver can't load it, but we're replacing it with a stub anyway.
 jest.mock(
-  "@mariozechner/pi-coding-agent",
+  "@earendil-works/pi-coding-agent",
   () => ({
     isToolCallEventType: (toolName: string, event: { toolName: string }) =>
       event.toolName === toolName,

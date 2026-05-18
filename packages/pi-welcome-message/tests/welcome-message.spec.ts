@@ -8,7 +8,7 @@ const mockSettingsManagerCreate = jest.fn(() => ({
 const mockGetAgentDir = jest.fn(() => "/home/test/.pi/agent");
 
 jest.mock(
-  "@mariozechner/pi-coding-agent",
+  "@earendil-works/pi-coding-agent",
   () => ({
     getAgentDir: mockGetAgentDir,
     SettingsManager: {
@@ -25,7 +25,7 @@ jest.mock("node:fs/promises", () => ({
 }));
 
 jest.mock(
-  "@mariozechner/pi-tui",
+  "@earendil-works/pi-tui",
   () => {
     return {
       Box: class Box {

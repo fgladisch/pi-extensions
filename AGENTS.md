@@ -90,7 +90,7 @@ Releases are CI-driven from `.github/workflows/release.yml` on pushes to `main`.
 
 ## Architecture
 
-This repo is a workspace for pi (`@mariozechner/pi-coding-agent`) extension packages. Source-of-truth implementations live in `packages/pi-*/extensions/index.ts`. Each extension entry exports `(pi: ExtensionAPI) => void` and registers commands/hooks against the `ExtensionAPI`.
+This repo is a workspace for pi (`@earendil-works/pi-coding-agent`) extension packages. Source-of-truth implementations live in `packages/pi-*/extensions/index.ts`. Each extension entry exports `(pi: ExtensionAPI) => void` and registers commands/hooks against the `ExtensionAPI`.
 
 **Extension hooks in use** (see [packages/pi-bash-approval/extensions/index.ts](packages/pi-bash-approval/extensions/index.ts) for the canonical example):
 
@@ -111,7 +111,7 @@ Tests use Jest + ts-jest and live under `packages/<pkg>/tests/<feature>.spec.ts`
 **Conventions**:
 
 - One spec file per extension, named to match.
-- Mock `@mariozechner/pi-coding-agent` with `jest.mock(..., { virtual: true })` — it's ESM-only and Jest's CJS resolver can't load it. Stub only the helpers your extension imports (e.g. `isToolCallEventType`).
+- Mock `@earendil-works/pi-coding-agent` with `jest.mock(..., { virtual: true })` — it's ESM-only and Jest's CJS resolver can't load it. Stub only the helpers your extension imports (e.g. `isToolCallEventType`).
 - Mock `node:fs` rather than touching the real filesystem.
 - Provide a `setup()` helper that resets modules, applies fs mocks, calls the extension's default export against a fake `pi` API, and returns the recorded `tool_call` handler and registered commands. See [packages/pi-bash-approval/tests/bash-approval.spec.ts](packages/pi-bash-approval/tests/bash-approval.spec.ts) for the canonical pattern.
 - Build a `makeCtx()` helper that returns `{ ctx, notify, select }` with `ctx.hasUI` togglable and `select` driven by an injected `pick` function — this keeps interactive tests readable.
@@ -133,7 +133,7 @@ There is no build artifact to verify; pi loads the `.ts` files directly.
 
 ## Tech Stack
 
-Node.js 20+ • TypeScript 5.6 (strict, ES2022, NodeNext) • Jest 29 + ts-jest • ESLint 8 + `@typescript-eslint` 8 • Prettier 3 • husky 9 + lint-staged 16 • `@mariozechner/pi-coding-agent` (ExtensionAPI host)
+Node.js 20+ • TypeScript 5.6 (strict, ES2022, NodeNext) • Jest 29 + ts-jest • ESLint 8 + `@typescript-eslint` 8 • Prettier 3 • husky 9 + lint-staged 16 • `@earendil-works/pi-coding-agent` (ExtensionAPI host)
 
 ## Writing a New Extension
 
@@ -149,8 +149,8 @@ Node.js 20+ • TypeScript 5.6 (strict, ES2022, NodeNext) • Jest 29 + ts-jest 
 **Skeleton**:
 
 ```typescript
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
 
 export default function (pi: ExtensionAPI) {
   pi.registerCommand("my-feature-reload", {

@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 jest.mock(
-  "@mariozechner/pi-coding-agent",
+  "@earendil-works/pi-coding-agent",
   () => ({
     CustomEditor: class CustomEditor {
       constructor(_tui: unknown, _theme: unknown, _keybindings: unknown) {}
@@ -13,7 +13,7 @@ jest.mock(
 );
 
 jest.mock(
-  "@mariozechner/pi-tui",
+  "@earendil-works/pi-tui",
   () => ({
     Box: class Box {
       addChild = jest.fn();

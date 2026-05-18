@@ -8,10 +8,10 @@
 
 import { describe, expect, it, jest } from "@jest/globals";
 
-// `virtual: true` because @mariozechner/pi-coding-agent is ESM-only — Jest's
+// `virtual: true` because @earendil-works/pi-coding-agent is ESM-only — Jest's
 // CJS resolver can't load it. The caveman extension only imports the type,
 // so a stub is enough.
-jest.mock("@mariozechner/pi-coding-agent", () => ({}), { virtual: true });
+jest.mock("@earendil-works/pi-coding-agent", () => ({}), { virtual: true });
 
 jest.mock("node:fs", () => ({
   readFileSync: jest.fn(),

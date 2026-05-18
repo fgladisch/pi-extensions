@@ -1,4 +1,4 @@
-import { getAgentDir, SettingsManager } from "@mariozechner/pi-coding-agent";
+import { getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
 import type { Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";

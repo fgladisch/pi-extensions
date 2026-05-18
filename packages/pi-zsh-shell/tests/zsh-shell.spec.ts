@@ -5,7 +5,7 @@ import * as path from "node:path";
 const exec = jest.fn<(...args: unknown[]) => unknown>();
 
 jest.mock(
-  "@mariozechner/pi-coding-agent",
+  "@earendil-works/pi-coding-agent",
   () => ({
     createLocalBashOperations: () => ({ exec }),
   }),
