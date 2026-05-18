@@ -26,6 +26,7 @@ type FooterFactory = (
 
 type FooterData = {
   readonly getGitBranch: () => string | null;
+  readonly getExtensionStatuses: () => ReadonlyMap<string, string>;
   readonly onBranchChange: (callback: () => void) => () => void;
 };
 
@@ -75,11 +76,13 @@ export default function (pi: ExtensionAPI): void {
     ctx.ui.setFooter((tui, _theme, footerData) => {
       let cachedWidth: number | null = null;
       let cachedBranchName: string | null = null;
+      let cachedExtensionStatusesKey: string | null = null;
       let cachedLines: string[] | null = null;
 
       const invalidate = () => {
         cachedWidth = null;
         cachedBranchName = null;
+        cachedExtensionStatusesKey = null;
         cachedLines = null;
       };
 
@@ -97,11 +100,16 @@ export default function (pi: ExtensionAPI): void {
         invalidate,
         render(width: number): string[] {
           const branchName = footerData.getGitBranch() ?? NO_BRANCH;
+          const extensionStatuses = Array.from(
+            footerData.getExtensionStatuses().values(),
+          );
+          const extensionStatusesKey = extensionStatuses.join("\0");
 
           if (
             cachedLines &&
             cachedWidth === width &&
-            cachedBranchName === branchName
+            cachedBranchName === branchName &&
+            cachedExtensionStatusesKey === extensionStatusesKey
           ) {
             return cachedLines;
           }
@@ -112,10 +120,12 @@ export default function (pi: ExtensionAPI): void {
             thinkingLevel: currentThinkingLevel,
             projectName,
             branchName,
+            extensionStatuses,
           });
 
           cachedWidth = width;
           cachedBranchName = branchName;
+          cachedExtensionStatusesKey = extensionStatusesKey;
           cachedLines = [truncateToWidth(line, width), ""];
 
           return cachedLines;

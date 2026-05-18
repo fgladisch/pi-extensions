@@ -25,6 +25,7 @@ export type FooterLineInput = {
   readonly thinkingLevel: string;
   readonly projectName: string;
   readonly branchName: string;
+  readonly extensionStatuses: readonly string[];
 };
 
 export const DEFAULT_FOOTER_CONFIG: FooterConfig = {

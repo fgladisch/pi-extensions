@@ -68,7 +68,14 @@ export async function loadFooterConfig(): Promise<FooterConfig> {
 }
 
 export function formatFooterLine(input: FooterLineInput): string {
-  const { config, modelId, thinkingLevel, projectName, branchName } = input;
+  const {
+    config,
+    modelId,
+    thinkingLevel,
+    projectName,
+    branchName,
+    extensionStatuses,
+  } = input;
   const parts: string[] = [];
 
   if (config.show.model) {
@@ -86,6 +93,8 @@ export function formatFooterLine(input: FooterLineInput): string {
   if (config.show.branch) {
     parts.push(`${config.icons.branch} ${branchName}`);
   }
+
+  parts.push(...extensionStatuses);
 
   return parts.join(` ${config.separator} `);
 }

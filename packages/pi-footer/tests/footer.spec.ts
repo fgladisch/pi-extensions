@@ -38,6 +38,7 @@ type FakePi = {
 
 type FakeFooterData = {
   readonly getGitBranch: jest.Mock<() => string | null>;
+  readonly getExtensionStatuses: jest.Mock<() => ReadonlyMap<string, string>>;
   readonly onBranchChange: jest.Mock<(callback: () => void) => () => void>;
 };
 
@@ -102,11 +103,15 @@ function makeContext(overrides: Partial<FakeContext> = {}): FakeContext {
   };
 }
 
-function makeFooterData(branchName: string | null = "main") {
+function makeFooterData(
+  branchName: string | null = "main",
+  extensionStatuses: ReadonlyMap<string, string> = new Map(),
+) {
   const unsubscribe = jest.fn();
   let branchChangeCallback: (() => void) | null = null;
   const footerData: FakeFooterData = {
     getGitBranch: jest.fn(() => branchName),
+    getExtensionStatuses: jest.fn(() => extensionStatuses),
     onBranchChange: jest.fn((callback: () => void) => {
       branchChangeCallback = callback;
 
@@ -174,6 +179,7 @@ describe("footer utilities", () => {
         thinkingLevel: "med",
         projectName: "pi-extensions",
         branchName: "main",
+        extensionStatuses: [],
       }),
     ).toBe(DEFAULT_LINE);
   });
@@ -198,6 +204,7 @@ describe("footer utilities", () => {
         thinkingLevel: "high",
         projectName: "pi-extensions",
         branchName: "main",
+        extensionStatuses: [],
       }),
     ).toBe("M GPT-5.5 | thinking=high | P pi-extensions");
   });
@@ -249,6 +256,30 @@ describe("pi-footer extension", () => {
     await trigger(handlers, "session_start", { reason: "startup" }, ctx);
 
     expect(ctx.ui.setFooter).not.toHaveBeenCalled();
+  });
+
+  it("renders extension statuses after the branch with the configured separator", async () => {
+    const { handlers } = setup();
+    const ctx = makeContext();
+    await trigger(handlers, "session_start", { reason: "startup" }, ctx);
+
+    const { footerData } = makeFooterData(
+      "main",
+      new Map([
+        ["caveman", "🪨 caveman lite"],
+        ["preset", "preset:dev"],
+      ]),
+    );
+    const footer = getFooterFactory(ctx)(
+      { requestRender: jest.fn() },
+      {},
+      footerData,
+    );
+
+    expect(footer.render(200)).toEqual([
+      `${DEFAULT_LINE}  🪨 caveman lite  preset:dev`,
+      "",
+    ]);
   });
 
   it("uses configured fallbacks for missing model, project, and branch", async () => {

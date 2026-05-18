@@ -9,7 +9,7 @@ Default footer:
 
 ```
 
-The extension intentionally renders a blank line after the footer so additional footer content starts on a new line.
+The extension renders Pi extension statuses from `ctx.ui.setStatus()` after the git branch, using the same separator between status entries. It also intentionally renders a blank line after the footer so terminal content starts on a new line.
 
 ## Install
 
