@@ -1,6 +1,6 @@
 {
   "name": "@fgladisch/pi-bash-approval",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Interactive allow-list guard for Pi bash tool calls",
   "keywords": [
     "pi-package"
