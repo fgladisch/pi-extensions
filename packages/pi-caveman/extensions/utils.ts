@@ -150,7 +150,7 @@ export function buildSystemPromptInjection(
 }
 
 export function statusLine(state: CavemanState): string {
-  return state.enabled ? `🪨 caveman ${state.level} •` : "🪨 caveman off •";
+  return state.enabled ? `🪨 caveman ${state.level}` : "🪨 caveman off";
 }
 
 export function getSkillPath(): string {

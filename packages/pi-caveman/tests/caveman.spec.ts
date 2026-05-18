@@ -289,10 +289,7 @@ describe("caveman extension", () => {
         expect.stringContaining("SKILL.md not found"),
         "warning",
       );
-      expect(setStatus).toHaveBeenCalledWith(
-        "caveman",
-        expect.stringContaining("caveman full"),
-      );
+      expect(setStatus).toHaveBeenCalledWith("caveman", "🪨 caveman full");
     });
 
     it("does not warn when SKILL.md is loaded", () => {
@@ -409,10 +406,7 @@ describe("caveman extension", () => {
       expect(rec.fs.writeFileSync).toHaveBeenCalledTimes(1);
       const [, content] = rec.fs.writeFileSync.mock.calls[0]!;
       expect(JSON.parse(content as string)).toMatchObject({ enabled: false });
-      expect(setStatus).toHaveBeenCalledWith(
-        "caveman",
-        expect.stringContaining("caveman off"),
-      );
+      expect(setStatus).toHaveBeenCalledWith("caveman", "🪨 caveman off");
       expect(notify).toHaveBeenCalledWith("caveman OFF", "info");
     });
 
@@ -459,7 +453,7 @@ describe("caveman extension", () => {
         });
         expect(setStatus).toHaveBeenCalledWith(
           "caveman",
-          expect.stringContaining(`caveman ${level}`),
+          `🪨 caveman ${level}`,
         );
         expect(notify).toHaveBeenCalledWith(`caveman ON (${level})`, "info");
       },
