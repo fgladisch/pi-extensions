@@ -1,0 +1,24 @@
+{
+  "name": "@fgladisch/pi-footer",
+  "version": "0.1.0",
+  "description": "Configurable compact footer extension for Pi",
+  "keywords": [
+    "pi-package"
+  ],
+  "license": "MIT",
+  "files": [
+    "extensions",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fgladisch/pi-extensions.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
