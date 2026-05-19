@@ -28,6 +28,10 @@ function parseConfig(raw: string): FooterConfig {
     parsed.icons && typeof parsed.icons === "object"
       ? parsed.icons
       : ({} as Partial<FooterConfig["icons"]>);
+  const promptInput =
+    parsed.promptInput && typeof parsed.promptInput === "object"
+      ? parsed.promptInput
+      : ({} as Partial<FooterConfig["promptInput"]>);
   const segments =
     parsed.segments && typeof parsed.segments === "object"
       ? parsed.segments
@@ -38,6 +42,12 @@ function parseConfig(raw: string): FooterConfig {
       model: readString(icons.model, DEFAULT_FOOTER_CONFIG.icons.model),
       project: readString(icons.project, DEFAULT_FOOTER_CONFIG.icons.project),
       branch: readString(icons.branch, DEFAULT_FOOTER_CONFIG.icons.branch),
+    },
+    promptInput: {
+      prefix: readString(
+        promptInput.prefix,
+        DEFAULT_FOOTER_CONFIG.promptInput.prefix,
+      ),
     },
     separator: readString(parsed.separator, DEFAULT_FOOTER_CONFIG.separator),
     segments: {

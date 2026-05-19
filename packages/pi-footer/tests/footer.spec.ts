@@ -6,6 +6,17 @@ const mockGetAgentDir = jest.fn(() => "/home/test/.pi/agent");
 jest.mock(
   "@earendil-works/pi-coding-agent",
   () => ({
+    CustomEditor: class MockCustomEditor {
+      constructor(
+        readonly tui: { readonly requestRender: () => void },
+        readonly theme: unknown,
+        readonly keybindings: unknown,
+      ) {}
+
+      render(width: number): string[] {
+        return ["─".repeat(width), "".padEnd(width), "─".repeat(width)];
+      }
+    },
     getAgentDir: mockGetAgentDir,
   }),
   { virtual: true },
@@ -17,13 +28,39 @@ jest.mock("node:fs/promises", () => ({
 
 jest.mock(
   "@earendil-works/pi-tui",
-  () => ({
-    truncateToWidth: (text: string, width: number) => {
-      const chars = [...text];
+  () => {
+    const ansiPattern = /\x1b\[[0-9;]*m/g;
+    const visibleWidth = (text: string) => text.replace(ansiPattern, "").length;
 
-      return chars.length > width ? chars.slice(0, width).join("") : text;
-    },
-  }),
+    return {
+      truncateToWidth: (text: string, width: number) => {
+        if (visibleWidth(text) <= width) {
+          return text;
+        }
+
+        let output = "";
+        let visible = 0;
+        let index = 0;
+
+        while (index < text.length && visible < width) {
+          const match = text.slice(index).match(/^\x1b\[[0-9;]*m/);
+
+          if (match?.[0]) {
+            output += match[0];
+            index += match[0].length;
+            continue;
+          }
+
+          output += text[index];
+          visible++;
+          index++;
+        }
+
+        return output;
+      },
+      visibleWidth,
+    };
+  },
   { virtual: true },
 );
 
@@ -48,8 +85,12 @@ type FakeContext = {
   readonly cwd: string;
   readonly model?: { readonly id: string };
   readonly ui: {
+    readonly setEditorComponent: jest.Mock<(factory: unknown) => unknown>;
     readonly setFooter: jest.Mock<(factory: unknown) => unknown>;
     readonly notify: jest.Mock<(message: string, level: string) => void>;
+    readonly theme: {
+      readonly fg: jest.Mock<(color: "accent", text: string) => string>;
+    };
   };
 };
 
@@ -99,8 +140,14 @@ function makeContext(overrides: Partial<FakeContext> = {}): FakeContext {
     cwd: "/Users/felix/code/pi-extensions",
     model: { id: "gpt-5.5" },
     ui: {
+      setEditorComponent: jest.fn(),
       setFooter: jest.fn(),
       notify: jest.fn(),
+      theme: {
+        fg: jest.fn(
+          (_color: "accent", text: string) => `\x1b[35m${text}\x1b[0m`,
+        ),
+      },
     },
     ...overrides,
   };
@@ -147,6 +194,22 @@ function getFooterFactory(ctx: FakeContext): FooterFactory {
   }
 
   return factory as FooterFactory;
+}
+
+type EditorFactory = (
+  tui: { readonly requestRender: () => void },
+  theme: unknown,
+  keybindings: unknown,
+) => { readonly render: (width: number) => readonly string[] };
+
+function getEditorFactory(ctx: FakeContext): EditorFactory {
+  const factory = ctx.ui.setEditorComponent.mock.calls.at(0)?.at(0);
+
+  if (typeof factory !== "function") {
+    throw new Error("editor factory was not registered");
+  }
+
+  return factory as EditorFactory;
 }
 
 async function trigger(
@@ -202,10 +265,11 @@ describe("footer utilities", () => {
     ).toBe(" gpt-5.5 (med)   pi-extensions   main");
   });
 
-  it("honors custom icons, separator, and hidden fields", async () => {
+  it("honors custom icons, separator, hidden fields, and prompt input prefix", async () => {
     (fs.readFile as jest.Mock<any>).mockResolvedValue(
       JSON.stringify({
         icons: { model: "M", project: "P", branch: "B" },
+        promptInput: { prefix: "❯" },
         separator: "|",
         segments: { branch: false },
       }),
@@ -214,6 +278,7 @@ describe("footer utilities", () => {
 
     const config = await loadFooterConfig();
 
+    expect(config.promptInput.prefix).toBe("❯");
     expect(
       formatFooterLine({
         config,
@@ -230,6 +295,7 @@ describe("footer utilities", () => {
     (fs.readFile as jest.Mock<any>).mockResolvedValue(
       JSON.stringify({
         icons: { model: 7 },
+        promptInput: { prefix: 9 },
         separator: false,
         thinkingPrefix: "think:",
         defaultThinkingLevel: ["high"],
@@ -294,6 +360,27 @@ describe("pi-footer extension", () => {
     await trigger(handlers, "session_start", { reason: "startup" }, ctx);
 
     expect(ctx.ui.setFooter).not.toHaveBeenCalled();
+    expect(ctx.ui.setEditorComponent).not.toHaveBeenCalled();
+  });
+
+  it("registers a prompt input editor with the configured prefix", async () => {
+    (fs.readFile as jest.Mock<any>).mockResolvedValue(
+      JSON.stringify({ promptInput: { prefix: "➜" } }),
+    );
+    const { handlers } = setup();
+    const ctx = makeContext();
+
+    await trigger(handlers, "session_start", { reason: "startup" }, ctx);
+
+    expect(ctx.ui.setEditorComponent).toHaveBeenCalledTimes(1);
+    const editor = getEditorFactory(ctx)({ requestRender: jest.fn() }, {}, {});
+
+    expect(editor.render(20)).toEqual([
+      "  ──────────────────",
+      "\x1b[35m➜\x1b[0m                   ",
+      "  ──────────────────",
+    ]);
+    expect(ctx.ui.theme.fg).toHaveBeenCalledWith("accent", "➜");
   });
 
   it("renders extension statuses after the branch with the configured separator", async () => {

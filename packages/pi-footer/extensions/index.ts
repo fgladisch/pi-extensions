@@ -1,5 +1,8 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth } from "@earendil-works/pi-tui";
+import {
+  CustomEditor,
+  type ExtensionAPI,
+} from "@earendil-works/pi-coding-agent";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import * as path from "node:path";
 
 import { DEFAULT_FOOTER_CONFIG, type FooterConfig } from "./types";
@@ -10,13 +13,25 @@ type FooterContext = {
   readonly cwd: string;
   readonly model?: { readonly id?: string };
   readonly ui: {
+    readonly setEditorComponent: (
+      factory: PromptInputEditorFactory | undefined,
+    ) => void;
     readonly setFooter: (factory: FooterFactory | undefined) => void;
     readonly notify: (
       message: string,
       level: "info" | "warning" | "error",
     ) => void;
+    readonly theme: {
+      readonly fg: (color: "accent", text: string) => string;
+    };
   };
 };
+
+type PromptInputEditorFactory = (
+  tui: ConstructorParameters<typeof CustomEditor>[0],
+  theme: ConstructorParameters<typeof CustomEditor>[1],
+  keybindings: ConstructorParameters<typeof CustomEditor>[2],
+) => PromptInputEditor;
 
 type FooterFactory = (
   tui: { readonly requestRender: () => void },
@@ -49,6 +64,33 @@ type ModelSelectEvent = {
 const NO_MODEL = "no-model";
 const NO_BRANCH = "no-branch";
 const WORKSPACE_FALLBACK = "workspace";
+const PROMPT_PREFIX_GAP = " ";
+
+class PromptInputEditor extends CustomEditor {
+  constructor(
+    tui: ConstructorParameters<typeof CustomEditor>[0],
+    theme: ConstructorParameters<typeof CustomEditor>[1],
+    keybindings: ConstructorParameters<typeof CustomEditor>[2],
+    private readonly styledPromptInputPrefix: string,
+  ) {
+    super(tui, theme, keybindings);
+  }
+
+  override render(width: number): string[] {
+    const prefix = this.styledPromptInputPrefix
+      ? `${this.styledPromptInputPrefix}${PROMPT_PREFIX_GAP}`
+      : "";
+    const prefixWidth = visibleWidth(prefix);
+    const editorWidth = Math.max(1, width - prefixWidth);
+    const indentation = " ".repeat(prefixWidth);
+
+    return super.render(editorWidth).map((line, lineIndex) => {
+      const linePrefix = lineIndex === 1 ? prefix : indentation;
+
+      return truncateToWidth(`${linePrefix}${line}`, width);
+    });
+  }
+}
 
 export default function (pi: ExtensionAPI): void {
   let currentConfig: FooterConfig = DEFAULT_FOOTER_CONFIG;
@@ -72,6 +114,15 @@ export default function (pi: ExtensionAPI): void {
     currentThinkingLevel = pi.getThinkingLevel();
 
     const projectName = path.basename(ctx.cwd) || WORKSPACE_FALLBACK;
+
+    const styledPromptInputPrefix = currentConfig.promptInput.prefix
+      ? ctx.ui.theme.fg("accent", currentConfig.promptInput.prefix)
+      : "";
+
+    ctx.ui.setEditorComponent(
+      (tui, theme, keybindings) =>
+        new PromptInputEditor(tui, theme, keybindings, styledPromptInputPrefix),
+    );
 
     ctx.ui.setFooter((tui, _theme, footerData) => {
       let cachedWidth: number | null = null;

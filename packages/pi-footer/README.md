@@ -1,6 +1,12 @@
 # @fgladisch/pi-footer
 
-Minimal configurable footer extension for Pi.
+Minimal configurable footer and prompt input extension for Pi.
+
+Default prompt input prefix:
+
+```text
+➜
+```
 
 Default footer:
 
@@ -31,6 +37,9 @@ Optional config file: `~/.pi/agent/footer.json`
     "project": "",
     "branch": ""
   },
+  "promptInput": {
+    "prefix": "➜"
+  },
   "separator": "",
   "segments": {
     "model": true,
@@ -40,7 +49,7 @@ Optional config file: `~/.pi/agent/footer.json`
 }
 ```
 
-Partial config is supported. Invalid fields fall back to defaults.
+Partial config is supported. Invalid fields fall back to defaults. Set `promptInput.prefix` to customize the arrow shown next to the prompt input; it renders in the active theme's accent color. Use an empty string to hide it.
 
 ## Commands
 

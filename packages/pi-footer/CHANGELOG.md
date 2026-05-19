@@ -1,5 +1,11 @@
 # @fgladisch/pi-footer
 
+## Unreleased
+
+### Minor Changes
+
+- Add a configurable prompt input prefix, defaulting to an accent-colored `➜` via `promptInput.prefix` in `footer.json`.
+
 ## 0.3.0
 
 ### Minor Changes

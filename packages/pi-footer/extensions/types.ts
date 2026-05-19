@@ -10,8 +10,13 @@ export type FooterSegmentsConfig = {
   readonly branch: boolean;
 };
 
+export type PromptInputConfig = {
+  readonly prefix: string;
+};
+
 export type FooterConfig = {
   readonly icons: FooterIconsConfig;
+  readonly promptInput: PromptInputConfig;
   readonly separator: string;
   readonly segments: FooterSegmentsConfig;
 };
@@ -30,6 +35,9 @@ export const DEFAULT_FOOTER_CONFIG: FooterConfig = {
     model: "",
     project: "",
     branch: "",
+  },
+  promptInput: {
+    prefix: "➜",
   },
   separator: "",
   segments: {
