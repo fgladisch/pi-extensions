@@ -11,7 +11,7 @@ Default prompt input prefix:
 Footer example with GitHub-renderable emoji icons:
 
 ```text
-🤖 gpt-5.5 (med)  ⏱️ 69%  📁 pi-extensions  🌿 main
+🤖 gpt-5.5 (med) | ⏱️ 69% | 📁 pi-extensions | 🌿 main
 ```
 
 On session start, the footer reads Pi's current thinking level via `pi.getThinkingLevel()`, so it is visible immediately. Later changes update through Pi's `thinking_level_select` event. The context segment shows Pi's current used context-window percentage when available.
@@ -43,7 +43,7 @@ Emoji icon example:
   "promptInput": {
     "prefix": "➜"
   },
-  "separator": "",
+  "separator": "|",
   "segments": {
     "model": true,
     "context": true,
