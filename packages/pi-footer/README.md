@@ -16,7 +16,7 @@ Default footer:
 
 On session start, the footer reads Pi's current thinking level via `pi.getThinkingLevel()`, so it is visible immediately. Later changes update through Pi's `thinking_level_select` event.
 
-The extension renders Pi extension statuses from `ctx.ui.setStatus()` after the git branch, using the same separator between status entries. Existing ANSI styling on those statuses is stripped and re-applied with the footer's dim color so statuses visually match the other footer segments.
+The extension renders Pi extension statuses from `ctx.ui.setStatus()` after the git branch, using the same separator between status entries. The full footer line is rendered with the active theme's explicit `text` color; existing ANSI styling on extension statuses is stripped first so statuses visually match the other footer segments.
 
 ## Install
 

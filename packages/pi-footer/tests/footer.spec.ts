@@ -97,6 +97,20 @@ type FakeContext = {
 const DEFAULT_LINE = " gpt-5.5   pi-extensions   main";
 const DEFAULT_EXTENSION_LINE = " gpt-5.5 (medium)   pi-extensions   main";
 
+function textColor(text: string): string {
+  return `\x1b[39m${text}\x1b[0m`;
+}
+
+function makeFooterTheme() {
+  return {
+    fg: jest.fn((color: "text", text: string) => {
+      expect(color).toBe("text");
+
+      return textColor(text);
+    }),
+  };
+}
+
 function setup() {
   jest.resetModules();
 
@@ -325,15 +339,20 @@ describe("pi-footer extension", () => {
 
     expect(ctx.ui.setFooter).toHaveBeenCalledTimes(1);
     const { footerData } = makeFooterData();
+    const theme = makeFooterTheme();
     const footer = getFooterFactory(ctx)(
       { requestRender: jest.fn() },
-      {},
+      theme,
       footerData,
     );
 
     expect(footer.render(200)).toEqual([
-      " gpt-5.5 (off)   pi-extensions   main",
+      textColor(" gpt-5.5 (off)   pi-extensions   main"),
     ]);
+    expect(theme.fg).toHaveBeenCalledWith(
+      "text",
+      " gpt-5.5 (off)   pi-extensions   main",
+    );
   });
 
   it("renders the current thinking level before any thinking change event", async () => {
@@ -344,13 +363,14 @@ describe("pi-footer extension", () => {
     await trigger(handlers, "session_start", { reason: "startup" }, ctx);
 
     const { footerData } = makeFooterData();
+    const theme = makeFooterTheme();
     const footer = getFooterFactory(ctx)(
       { requestRender: jest.fn() },
-      {},
+      theme,
       footerData,
     );
 
-    expect(footer.render(200)).toEqual([DEFAULT_EXTENSION_LINE]);
+    expect(footer.render(200)).toEqual([textColor(DEFAULT_EXTENSION_LINE)]);
   });
 
   it("does not register a footer without UI", async () => {
@@ -395,9 +415,7 @@ describe("pi-footer extension", () => {
         ["preset", "preset:dev"],
       ]),
     );
-    const theme = {
-      fg: jest.fn((_color: "dim", text: string) => `\x1b[2m${text}\x1b[0m`),
-    };
+    const theme = makeFooterTheme();
     const footer = getFooterFactory(ctx)(
       { requestRender: jest.fn() },
       theme,
@@ -405,11 +423,15 @@ describe("pi-footer extension", () => {
     );
 
     expect(footer.render(200)).toEqual([
-      `${DEFAULT_EXTENSION_LINE}  \x1b[2m🪨 caveman lite\x1b[0m  \x1b[2mpreset:dev\x1b[0m`,
+      textColor(`${DEFAULT_EXTENSION_LINE}  🪨 caveman lite  preset:dev`),
     ]);
+    expect(theme.fg).toHaveBeenCalledWith(
+      "text",
+      `${DEFAULT_EXTENSION_LINE}  🪨 caveman lite  preset:dev`,
+    );
   });
 
-  it("strips existing ANSI before dimming extension statuses", async () => {
+  it("strips existing ANSI before coloring extension statuses", async () => {
     const { handlers } = setup();
     const ctx = makeContext();
     await trigger(handlers, "session_start", { reason: "startup" }, ctx);
@@ -418,9 +440,7 @@ describe("pi-footer extension", () => {
       "main",
       new Map([["preset", "\x1b[35mpreset:dev\x1b[0m"]]),
     );
-    const theme = {
-      fg: jest.fn((_color: "dim", text: string) => `\x1b[2m${text}\x1b[0m`),
-    };
+    const theme = makeFooterTheme();
     const footer = getFooterFactory(ctx)(
       { requestRender: jest.fn() },
       theme,
@@ -428,9 +448,12 @@ describe("pi-footer extension", () => {
     );
 
     expect(footer.render(200)).toEqual([
-      `${DEFAULT_EXTENSION_LINE}  \x1b[2mpreset:dev\x1b[0m`,
+      textColor(`${DEFAULT_EXTENSION_LINE}  preset:dev`),
     ]);
-    expect(theme.fg).toHaveBeenCalledWith("dim", "preset:dev");
+    expect(theme.fg).toHaveBeenCalledWith(
+      "text",
+      `${DEFAULT_EXTENSION_LINE}  preset:dev`,
+    );
   });
 
   it("uses configured fallbacks for missing model, project, and branch", async () => {
@@ -444,12 +467,12 @@ describe("pi-footer extension", () => {
     const { footerData } = makeFooterData(null);
     const footer = getFooterFactory(ctx)(
       { requestRender: jest.fn() },
-      {},
+      makeFooterTheme(),
       footerData,
     );
 
     expect(footer.render(200)).toEqual([
-      " no-model (medium)   workspace   no-branch",
+      textColor(" no-model (medium)   workspace   no-branch"),
     ]);
   });
 
@@ -461,11 +484,11 @@ describe("pi-footer extension", () => {
     const { footerData } = makeFooterData();
     const footer = getFooterFactory(ctx)(
       { requestRender: jest.fn() },
-      {},
+      makeFooterTheme(),
       footerData,
     );
 
-    expect(footer.render(8)).toEqual([" gpt-5."]);
+    expect(footer.render(8)).toEqual([textColor(" gpt-5.")]);
   });
 
   it("requests render only when branch, thinking, and model values change", async () => {
@@ -477,7 +500,7 @@ describe("pi-footer extension", () => {
     const { footerData, unsubscribe, triggerBranchChange } = makeFooterData();
     const footer = getFooterFactory(ctx)(
       { requestRender: branchRender },
-      {},
+      makeFooterTheme(),
       footerData,
     );
 

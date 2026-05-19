@@ -6,6 +6,10 @@
 
 - Add a configurable prompt input prefix, defaulting to an accent-colored `➜` via `promptInput.prefix` in `footer.json`.
 
+### Patch Changes
+
+- Render footer items and extension statuses with the explicit theme `text` color instead of leaving footer items unstyled and coloring extension statuses with `dim`.
+
 ## 0.3.0
 
 ### Minor Changes

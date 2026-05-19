@@ -40,7 +40,7 @@ type FooterFactory = (
 ) => FooterComponent;
 
 type FooterTheme = {
-  readonly fg: (color: "dim", text: string) => string;
+  readonly fg: (color: "text", text: string) => string;
 };
 
 type FooterData = {
@@ -163,7 +163,7 @@ export default function (pi: ExtensionAPI): void {
           const branchName = footerData.getGitBranch() ?? NO_BRANCH;
           const extensionStatuses = Array.from(
             footerData.getExtensionStatuses().values(),
-          ).map((status) => theme.fg("dim", stripAnsi(status)));
+          ).map(stripAnsi);
           const extensionStatusesKey = extensionStatuses.join("\0");
 
           if (
@@ -187,7 +187,7 @@ export default function (pi: ExtensionAPI): void {
           cachedWidth = width;
           cachedBranchName = branchName;
           cachedExtensionStatusesKey = extensionStatusesKey;
-          cachedLines = [truncateToWidth(line, width)];
+          cachedLines = [theme.fg("text", truncateToWidth(line, width))];
 
           return cachedLines;
         },
