@@ -11,7 +11,7 @@ and full documentation live in `packages/`.
 
 - [`@fgladisch/pi-bash-approval`](packages/pi-bash-approval/README.md): Intercepts Pi bash calls and asks for approval unless a command matches your allow-list.
 - [`@fgladisch/pi-caveman`](packages/pi-caveman/README.md): Injects an always-on caveman prompt style with switchable intensity levels.
-- [`@fgladisch/pi-footer`](packages/pi-footer/README.md): Replaces Pi's footer with a configurable compact model, thinking, project, git branch, and extension status summary.
+- [`@fgladisch/pi-footer`](packages/pi-footer/README.md): Replaces Pi's footer with a configurable compact model, thinking, context usage, project, git branch, and extension status summary.
 - [`@fgladisch/pi-user-select`](packages/pi-user-select/README.md): Adds a `user_select` tool so Pi can ask humans multiple-choice questions in workflow.
 - [`@fgladisch/pi-persistent-history`](packages/pi-persistent-history/README.md): Persists prompt input history per project and preloads it for up/down recall across sessions.
 - [`@fgladisch/pi-welcome-message`](packages/pi-welcome-message/README.md): Shows a configurable startup and `/new` workspace summary with package info, git status, useful resource links, and optional logo header.

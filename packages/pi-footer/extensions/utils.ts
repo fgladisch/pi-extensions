@@ -40,6 +40,7 @@ function parseConfig(raw: string): FooterConfig {
   return {
     icons: {
       model: readString(icons.model, DEFAULT_FOOTER_CONFIG.icons.model),
+      context: readString(icons.context, DEFAULT_FOOTER_CONFIG.icons.context),
       project: readString(icons.project, DEFAULT_FOOTER_CONFIG.icons.project),
       branch: readString(icons.branch, DEFAULT_FOOTER_CONFIG.icons.branch),
     },
@@ -52,6 +53,10 @@ function parseConfig(raw: string): FooterConfig {
     separator: readString(parsed.separator, DEFAULT_FOOTER_CONFIG.separator),
     segments: {
       model: readBoolean(segments.model, DEFAULT_FOOTER_CONFIG.segments.model),
+      context: readBoolean(
+        segments.context,
+        DEFAULT_FOOTER_CONFIG.segments.context,
+      ),
       project: readBoolean(
         segments.project,
         DEFAULT_FOOTER_CONFIG.segments.project,
@@ -79,6 +84,7 @@ export function formatFooterLine(input: FooterLineInput): string {
     config,
     modelId,
     thinkingLevel,
+    contextUsagePercent,
     projectName,
     branchName,
     extensionStatuses,
@@ -89,6 +95,10 @@ export function formatFooterLine(input: FooterLineInput): string {
     const thinkingSuffix = thinkingLevel ? ` (${thinkingLevel})` : "";
 
     parts.push(`${config.icons.model} ${modelId}${thinkingSuffix}`);
+  }
+
+  if (config.segments.context && contextUsagePercent !== null) {
+    parts.push(`${config.icons.context} ${Math.round(contextUsagePercent)}%`);
   }
 
   if (config.segments.project) {

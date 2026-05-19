@@ -12,6 +12,9 @@ type FooterContext = {
   readonly hasUI: boolean;
   readonly cwd: string;
   readonly model?: { readonly id?: string };
+  readonly getContextUsage: () =>
+    | { readonly percent: number | null }
+    | undefined;
   readonly ui: {
     readonly setEditorComponent: (
       factory: PromptInputEditorFactory | undefined,
@@ -137,12 +140,14 @@ export default function (pi: ExtensionAPI): void {
     ctx.ui.setFooter((tui, theme, footerData) => {
       let cachedWidth: number | null = null;
       let cachedBranchName: string | null = null;
+      let cachedContextUsagePercent: number | null = null;
       let cachedExtensionStatusesKey: string | null = null;
       let cachedLines: string[] | null = null;
 
       const invalidate = () => {
         cachedWidth = null;
         cachedBranchName = null;
+        cachedContextUsagePercent = null;
         cachedExtensionStatusesKey = null;
         cachedLines = null;
       };
@@ -161,6 +166,7 @@ export default function (pi: ExtensionAPI): void {
         invalidate,
         render(width: number): string[] {
           const branchName = footerData.getGitBranch() ?? NO_BRANCH;
+          const contextUsagePercent = ctx.getContextUsage()?.percent ?? null;
           const extensionStatuses = Array.from(
             footerData.getExtensionStatuses().values(),
           ).map(stripAnsi);
@@ -170,6 +176,7 @@ export default function (pi: ExtensionAPI): void {
             cachedLines &&
             cachedWidth === width &&
             cachedBranchName === branchName &&
+            cachedContextUsagePercent === contextUsagePercent &&
             cachedExtensionStatusesKey === extensionStatusesKey
           ) {
             return cachedLines;
@@ -179,6 +186,7 @@ export default function (pi: ExtensionAPI): void {
             config: currentConfig,
             modelId: currentModelId,
             thinkingLevel: currentThinkingLevel,
+            contextUsagePercent,
             projectName,
             branchName,
             extensionStatuses,
@@ -186,6 +194,7 @@ export default function (pi: ExtensionAPI): void {
 
           cachedWidth = width;
           cachedBranchName = branchName;
+          cachedContextUsagePercent = contextUsagePercent;
           cachedExtensionStatusesKey = extensionStatusesKey;
           cachedLines = [theme.fg("text", truncateToWidth(line, width))];
 

@@ -84,6 +84,9 @@ type FakeContext = {
   readonly hasUI: boolean;
   readonly cwd: string;
   readonly model?: { readonly id: string };
+  readonly getContextUsage: jest.Mock<
+    () => { readonly percent: number | null } | undefined
+  >;
   readonly ui: {
     readonly setEditorComponent: jest.Mock<(factory: unknown) => unknown>;
     readonly setFooter: jest.Mock<(factory: unknown) => unknown>;
@@ -94,8 +97,9 @@ type FakeContext = {
   };
 };
 
-const DEFAULT_LINE = " gpt-5.5   pi-extensions   main";
-const DEFAULT_EXTENSION_LINE = " gpt-5.5 (medium)   pi-extensions   main";
+const DEFAULT_LINE = " gpt-5.5  󰊚 69%   pi-extensions   main";
+const DEFAULT_EXTENSION_LINE =
+  " gpt-5.5 (medium)  󰊚 69%   pi-extensions   main";
 
 function textColor(text: string): string {
   return `\x1b[39m${text}\x1b[0m`;
@@ -153,6 +157,7 @@ function makeContext(overrides: Partial<FakeContext> = {}): FakeContext {
     hasUI: true,
     cwd: "/Users/felix/code/pi-extensions",
     model: { id: "gpt-5.5" },
+    getContextUsage: jest.fn(() => ({ percent: 69 })),
     ui: {
       setEditorComponent: jest.fn(),
       setFooter: jest.fn(),
@@ -257,6 +262,7 @@ describe("footer utilities", () => {
         config: DEFAULT_FOOTER_CONFIG,
         modelId: "gpt-5.5",
         thinkingLevel: null,
+        contextUsagePercent: 69,
         projectName: "pi-extensions",
         branchName: "main",
         extensionStatuses: [],
@@ -272,17 +278,18 @@ describe("footer utilities", () => {
         config: DEFAULT_FOOTER_CONFIG,
         modelId: "gpt-5.5",
         thinkingLevel: "med",
+        contextUsagePercent: 69,
         projectName: "pi-extensions",
         branchName: "main",
         extensionStatuses: [],
       }),
-    ).toBe(" gpt-5.5 (med)   pi-extensions   main");
+    ).toBe(" gpt-5.5 (med)  󰊚 69%   pi-extensions   main");
   });
 
   it("honors custom icons, separator, hidden fields, and prompt input prefix", async () => {
     (fs.readFile as jest.Mock<any>).mockResolvedValue(
       JSON.stringify({
-        icons: { model: "M", project: "P", branch: "B" },
+        icons: { model: "M", context: "C", project: "P", branch: "B" },
         promptInput: { prefix: "❯" },
         separator: "|",
         segments: { branch: false },
@@ -298,11 +305,12 @@ describe("footer utilities", () => {
         config,
         modelId: "gpt-5.5",
         thinkingLevel: "high",
+        contextUsagePercent: 69,
         projectName: "pi-extensions",
         branchName: "main",
         extensionStatuses: [],
       }),
-    ).toBe("M gpt-5.5 (high) | P pi-extensions");
+    ).toBe("M gpt-5.5 (high) | C 69% | P pi-extensions");
   });
 
   it("uses defaults when config is missing or fields have invalid types", async () => {
@@ -313,7 +321,7 @@ describe("footer utilities", () => {
         separator: false,
         thinkingPrefix: "think:",
         defaultThinkingLevel: ["high"],
-        segments: { model: "yes", thinking: false },
+        segments: { model: "yes", context: "no", thinking: false },
       }),
     );
     const { loadFooterConfig, DEFAULT_FOOTER_CONFIG } = loadUtils();
@@ -347,11 +355,11 @@ describe("pi-footer extension", () => {
     );
 
     expect(footer.render(200)).toEqual([
-      textColor(" gpt-5.5 (off)   pi-extensions   main"),
+      textColor(" gpt-5.5 (off)  󰊚 69%   pi-extensions   main"),
     ]);
     expect(theme.fg).toHaveBeenCalledWith(
       "text",
-      " gpt-5.5 (off)   pi-extensions   main",
+      " gpt-5.5 (off)  󰊚 69%   pi-extensions   main",
     );
   });
 
@@ -472,7 +480,7 @@ describe("pi-footer extension", () => {
     );
 
     expect(footer.render(200)).toEqual([
-      textColor(" no-model (medium)   workspace   no-branch"),
+      textColor(" no-model (medium)  󰊚 69%   workspace   no-branch"),
     ]);
   });
 
@@ -489,6 +497,25 @@ describe("pi-footer extension", () => {
     );
 
     expect(footer.render(8)).toEqual([textColor(" gpt-5.")]);
+  });
+
+  it("omits context segment when context usage is unavailable", async () => {
+    const { handlers } = setup();
+    const ctx = makeContext({
+      getContextUsage: jest.fn(() => ({ percent: null })),
+    });
+    await trigger(handlers, "session_start", { reason: "startup" }, ctx);
+
+    const { footerData } = makeFooterData();
+    const footer = getFooterFactory(ctx)(
+      { requestRender: jest.fn() },
+      makeFooterTheme(),
+      footerData,
+    );
+
+    expect(footer.render(200)).toEqual([
+      textColor(" gpt-5.5 (medium)   pi-extensions   main"),
+    ]);
   });
 
   it("requests render only when branch, thinking, and model values change", async () => {

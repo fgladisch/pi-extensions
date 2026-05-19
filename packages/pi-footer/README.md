@@ -8,13 +8,13 @@ Default prompt input prefix:
 ➜
 ```
 
-Default footer:
+Footer example with GitHub-renderable emoji icons:
 
 ```text
- gpt-5.5 (med)   pi-extensions   main
+🤖 gpt-5.5 (med)  ⏱️ 69%  📁 pi-extensions  🌿 main
 ```
 
-On session start, the footer reads Pi's current thinking level via `pi.getThinkingLevel()`, so it is visible immediately. Later changes update through Pi's `thinking_level_select` event.
+On session start, the footer reads Pi's current thinking level via `pi.getThinkingLevel()`, so it is visible immediately. Later changes update through Pi's `thinking_level_select` event. The context segment shows Pi's current used context-window percentage when available.
 
 The extension renders Pi extension statuses from `ctx.ui.setStatus()` after the git branch, using the same separator between status entries. The full footer line is rendered with the active theme's explicit `text` color; existing ANSI styling on extension statuses is stripped first so statuses visually match the other footer segments.
 
@@ -30,12 +30,15 @@ Or use from this workspace with Pi extension package discovery.
 
 Optional config file: `~/.pi/agent/footer.json`
 
+Emoji icon example:
+
 ```json
 {
   "icons": {
-    "model": "",
-    "project": "",
-    "branch": ""
+    "model": "🤖",
+    "context": "⏱️",
+    "project": "📁",
+    "branch": "🌿"
   },
   "promptInput": {
     "prefix": "➜"
@@ -43,6 +46,7 @@ Optional config file: `~/.pi/agent/footer.json`
   "separator": "",
   "segments": {
     "model": true,
+    "context": true,
     "project": true,
     "branch": true
   }

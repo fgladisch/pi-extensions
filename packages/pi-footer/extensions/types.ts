@@ -1,11 +1,13 @@
 export type FooterIconsConfig = {
   readonly model: string;
+  readonly context: string;
   readonly project: string;
   readonly branch: string;
 };
 
 export type FooterSegmentsConfig = {
   readonly model: boolean;
+  readonly context: boolean;
   readonly project: boolean;
   readonly branch: boolean;
 };
@@ -25,6 +27,7 @@ export type FooterLineInput = {
   readonly config: FooterConfig;
   readonly modelId: string;
   readonly thinkingLevel: string | null;
+  readonly contextUsagePercent: number | null;
   readonly projectName: string;
   readonly branchName: string;
   readonly extensionStatuses: readonly string[];
@@ -33,6 +36,7 @@ export type FooterLineInput = {
 export const DEFAULT_FOOTER_CONFIG: FooterConfig = {
   icons: {
     model: "",
+    context: "󰊚",
     project: "",
     branch: "",
   },
@@ -42,6 +46,7 @@ export const DEFAULT_FOOTER_CONFIG: FooterConfig = {
   separator: "",
   segments: {
     model: true,
+    context: true,
     project: true,
     branch: true,
   },
