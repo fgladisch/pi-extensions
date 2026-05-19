@@ -395,15 +395,42 @@ describe("pi-footer extension", () => {
         ["preset", "preset:dev"],
       ]),
     );
+    const theme = {
+      fg: jest.fn((_color: "dim", text: string) => `\x1b[2m${text}\x1b[0m`),
+    };
     const footer = getFooterFactory(ctx)(
       { requestRender: jest.fn() },
-      {},
+      theme,
       footerData,
     );
 
     expect(footer.render(200)).toEqual([
-      `${DEFAULT_EXTENSION_LINE}  🪨 caveman lite  preset:dev`,
+      `${DEFAULT_EXTENSION_LINE}  \x1b[2m🪨 caveman lite\x1b[0m  \x1b[2mpreset:dev\x1b[0m`,
     ]);
+  });
+
+  it("strips existing ANSI before dimming extension statuses", async () => {
+    const { handlers } = setup();
+    const ctx = makeContext();
+    await trigger(handlers, "session_start", { reason: "startup" }, ctx);
+
+    const { footerData } = makeFooterData(
+      "main",
+      new Map([["preset", "\x1b[35mpreset:dev\x1b[0m"]]),
+    );
+    const theme = {
+      fg: jest.fn((_color: "dim", text: string) => `\x1b[2m${text}\x1b[0m`),
+    };
+    const footer = getFooterFactory(ctx)(
+      { requestRender: jest.fn() },
+      theme,
+      footerData,
+    );
+
+    expect(footer.render(200)).toEqual([
+      `${DEFAULT_EXTENSION_LINE}  \x1b[2mpreset:dev\x1b[0m`,
+    ]);
+    expect(theme.fg).toHaveBeenCalledWith("dim", "preset:dev");
   });
 
   it("uses configured fallbacks for missing model, project, and branch", async () => {

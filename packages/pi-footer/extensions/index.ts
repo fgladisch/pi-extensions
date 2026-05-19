@@ -35,9 +35,13 @@ type PromptInputEditorFactory = (
 
 type FooterFactory = (
   tui: { readonly requestRender: () => void },
-  theme: unknown,
+  theme: FooterTheme,
   footerData: FooterData,
 ) => FooterComponent;
+
+type FooterTheme = {
+  readonly fg: (color: "dim", text: string) => string;
+};
 
 type FooterData = {
   readonly getGitBranch: () => string | null;
@@ -61,10 +65,16 @@ type ModelSelectEvent = {
   };
 };
 
+const ANSI_PATTERN =
+  /(?:\u001B\][\s\S]*?(?:\u0007|\u001B\\|\u009C))|[\u001B\u009B][[\]()#;?]*(?:\d{1,4}(?:[;:]\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]/g;
 const NO_MODEL = "no-model";
 const NO_BRANCH = "no-branch";
 const WORKSPACE_FALLBACK = "workspace";
 const PROMPT_PREFIX_GAP = " ";
+
+function stripAnsi(value: string): string {
+  return value.replace(ANSI_PATTERN, "");
+}
 
 class PromptInputEditor extends CustomEditor {
   constructor(
@@ -124,7 +134,7 @@ export default function (pi: ExtensionAPI): void {
         new PromptInputEditor(tui, theme, keybindings, styledPromptInputPrefix),
     );
 
-    ctx.ui.setFooter((tui, _theme, footerData) => {
+    ctx.ui.setFooter((tui, theme, footerData) => {
       let cachedWidth: number | null = null;
       let cachedBranchName: string | null = null;
       let cachedExtensionStatusesKey: string | null = null;
@@ -153,7 +163,7 @@ export default function (pi: ExtensionAPI): void {
           const branchName = footerData.getGitBranch() ?? NO_BRANCH;
           const extensionStatuses = Array.from(
             footerData.getExtensionStatuses().values(),
-          );
+          ).map((status) => theme.fg("dim", stripAnsi(status)));
           const extensionStatusesKey = extensionStatuses.join("\0");
 
           if (
