@@ -1,6 +1,6 @@
 {
   "name": "@fgladisch/pi-footer",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Configurable compact footer extension for Pi",
   "keywords": [
     "pi-package"
