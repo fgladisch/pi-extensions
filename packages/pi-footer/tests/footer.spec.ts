@@ -52,7 +52,7 @@ type FakeContext = {
   };
 };
 
-const DEFAULT_LINE = " GPT-5.5  think:med   pi-extensions   main";
+const DEFAULT_LINE = " gpt-5.5   pi-extensions   main";
 
 function setup() {
   jest.resetModules();
@@ -94,7 +94,7 @@ function makeContext(overrides: Partial<FakeContext> = {}): FakeContext {
   return {
     hasUI: true,
     cwd: "/Users/felix/code/pi-extensions",
-    model: { id: "GPT-5.5" },
+    model: { id: "gpt-5.5" },
     ui: {
       setFooter: jest.fn(),
       notify: jest.fn(),
@@ -169,14 +169,14 @@ describe("footer utilities", () => {
     );
   });
 
-  it("formats the default footer line", () => {
+  it("formats the default footer line without unavailable thinking", () => {
     const { DEFAULT_FOOTER_CONFIG, formatFooterLine } = loadUtils();
 
     expect(
       formatFooterLine({
         config: DEFAULT_FOOTER_CONFIG,
-        modelId: "GPT-5.5",
-        thinkingLevel: "med",
+        modelId: "gpt-5.5",
+        thinkingLevel: null,
         projectName: "pi-extensions",
         branchName: "main",
         extensionStatuses: [],
@@ -184,13 +184,27 @@ describe("footer utilities", () => {
     ).toBe(DEFAULT_LINE);
   });
 
-  it("honors custom icons, separator, prefix, and hidden fields", async () => {
+  it("formats available thinking inside the model segment", () => {
+    const { DEFAULT_FOOTER_CONFIG, formatFooterLine } = loadUtils();
+
+    expect(
+      formatFooterLine({
+        config: DEFAULT_FOOTER_CONFIG,
+        modelId: "gpt-5.5",
+        thinkingLevel: "med",
+        projectName: "pi-extensions",
+        branchName: "main",
+        extensionStatuses: [],
+      }),
+    ).toBe(" gpt-5.5 (med)   pi-extensions   main");
+  });
+
+  it("honors custom icons, separator, and hidden fields", async () => {
     (fs.readFile as jest.Mock<any>).mockResolvedValue(
       JSON.stringify({
         icons: { model: "M", project: "P", branch: "B" },
         separator: "|",
-        thinkingPrefix: "thinking=",
-        show: { branch: false },
+        segments: { branch: false },
       }),
     );
     const { loadFooterConfig, formatFooterLine } = loadUtils();
@@ -200,13 +214,13 @@ describe("footer utilities", () => {
     expect(
       formatFooterLine({
         config,
-        modelId: "GPT-5.5",
+        modelId: "gpt-5.5",
         thinkingLevel: "high",
         projectName: "pi-extensions",
         branchName: "main",
         extensionStatuses: [],
       }),
-    ).toBe("M GPT-5.5 | thinking=high | P pi-extensions");
+    ).toBe("M gpt-5.5 (high) | P pi-extensions");
   });
 
   it("uses defaults when config is missing or fields have invalid types", async () => {
@@ -214,8 +228,9 @@ describe("footer utilities", () => {
       JSON.stringify({
         icons: { model: 7 },
         separator: false,
+        thinkingPrefix: "think:",
         defaultThinkingLevel: ["high"],
-        show: { model: "yes" },
+        segments: { model: "yes", thinking: false },
       }),
     );
     const { loadFooterConfig, DEFAULT_FOOTER_CONFIG } = loadUtils();
@@ -233,7 +248,7 @@ describe("pi-footer extension", () => {
     );
   });
 
-  it("registers a two-line footer on UI session start", async () => {
+  it("registers a one-line footer on UI session start", async () => {
     const { handlers } = setup();
     const ctx = makeContext();
     await trigger(handlers, "session_start", { reason: "startup" }, ctx);
@@ -246,7 +261,7 @@ describe("pi-footer extension", () => {
       footerData,
     );
 
-    expect(footer.render(200)).toEqual([DEFAULT_LINE, ""]);
+    expect(footer.render(200)).toEqual([DEFAULT_LINE]);
   });
 
   it("does not register a footer without UI", async () => {
@@ -278,7 +293,6 @@ describe("pi-footer extension", () => {
 
     expect(footer.render(200)).toEqual([
       `${DEFAULT_LINE}  🪨 caveman lite  preset:dev`,
-      "",
     ]);
   });
 
@@ -298,8 +312,7 @@ describe("pi-footer extension", () => {
     );
 
     expect(footer.render(200)).toEqual([
-      " no-model  think:med   workspace   no-branch",
-      "",
+      " no-model   workspace   no-branch",
     ]);
   });
 
@@ -315,7 +328,7 @@ describe("pi-footer extension", () => {
       footerData,
     );
 
-    expect(footer.render(8)).toEqual([" GPT-5.", ""]);
+    expect(footer.render(8)).toEqual([" gpt-5."]);
   });
 
   it("requests render only when branch, thinking, and model values change", async () => {
@@ -333,12 +346,13 @@ describe("pi-footer extension", () => {
 
     triggerBranchChange();
     await trigger(handlers, "thinking_level_select", { level: "med" }, ctx);
+    await trigger(handlers, "thinking_level_select", { level: "med" }, ctx);
     await trigger(handlers, "thinking_level_select", { level: "high" }, ctx);
-    await trigger(handlers, "model_select", { model: { id: "GPT-5.5" } }, ctx);
+    await trigger(handlers, "model_select", { model: { id: "gpt-5.5" } }, ctx);
     await trigger(handlers, "model_select", { model: { id: "new" } }, ctx);
     footer.dispose?.();
 
-    expect(branchRender).toHaveBeenCalledTimes(3);
+    expect(branchRender).toHaveBeenCalledTimes(4);
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 
@@ -347,7 +361,7 @@ describe("pi-footer extension", () => {
     const ctx = makeContext();
     await trigger(handlers, "session_start", { reason: "startup" }, ctx);
     (fs.readFile as jest.Mock<any>).mockResolvedValue(
-      JSON.stringify({ separator: "|", show: { thinking: false } }),
+      JSON.stringify({ separator: "|" }),
     );
 
     await commands.get("footer-reload")?.handler("", ctx);

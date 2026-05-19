@@ -52,7 +52,7 @@ const WORKSPACE_FALLBACK = "workspace";
 
 export default function (pi: ExtensionAPI): void {
   let currentConfig: FooterConfig = DEFAULT_FOOTER_CONFIG;
-  let currentThinkingLevel = currentConfig.defaultThinkingLevel;
+  let currentThinkingLevel: string | null = null;
   let currentModelId = NO_MODEL;
   let invalidateFooterRender: (() => void) | null = null;
   let requestFooterRender: (() => void) | null = null;
@@ -68,7 +68,6 @@ export default function (pi: ExtensionAPI): void {
     }
 
     currentConfig = await loadFooterConfig();
-    currentThinkingLevel ||= currentConfig.defaultThinkingLevel;
     currentModelId = ctx.model?.id ?? NO_MODEL;
 
     const projectName = path.basename(ctx.cwd) || WORKSPACE_FALLBACK;
@@ -126,7 +125,7 @@ export default function (pi: ExtensionAPI): void {
           cachedWidth = width;
           cachedBranchName = branchName;
           cachedExtensionStatusesKey = extensionStatusesKey;
-          cachedLines = [truncateToWidth(line, width), ""];
+          cachedLines = [truncateToWidth(line, width)];
 
           return cachedLines;
         },

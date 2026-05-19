@@ -5,11 +5,16 @@ Minimal configurable footer extension for Pi.
 Default footer:
 
 ```text
- GPT-5.5  think:med   pi-extensions   main
-
+ gpt-5.5 (med)   pi-extensions   main
 ```
 
-The extension renders Pi extension statuses from `ctx.ui.setStatus()` after the git branch, using the same separator between status entries. It also intentionally renders a blank line after the footer so terminal content starts on a new line.
+If Pi has not reported a thinking level yet, the model segment omits it:
+
+```text
+ gpt-5.5   pi-extensions   main
+```
+
+The extension renders Pi extension statuses from `ctx.ui.setStatus()` after the git branch, using the same separator between status entries.
 
 ## Install
 
@@ -31,11 +36,8 @@ Optional config file: `~/.pi/agent/footer.json`
     "branch": ""
   },
   "separator": "",
-  "thinkingPrefix": "think:",
-  "defaultThinkingLevel": "med",
-  "show": {
+  "segments": {
     "model": true,
-    "thinking": true,
     "project": true,
     "branch": true
   }

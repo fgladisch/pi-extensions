@@ -28,10 +28,10 @@ function parseConfig(raw: string): FooterConfig {
     parsed.icons && typeof parsed.icons === "object"
       ? parsed.icons
       : ({} as Partial<FooterConfig["icons"]>);
-  const show =
-    parsed.show && typeof parsed.show === "object"
-      ? parsed.show
-      : ({} as Partial<FooterConfig["show"]>);
+  const segments =
+    parsed.segments && typeof parsed.segments === "object"
+      ? parsed.segments
+      : ({} as Partial<FooterConfig["segments"]>);
 
   return {
     icons: {
@@ -40,19 +40,16 @@ function parseConfig(raw: string): FooterConfig {
       branch: readString(icons.branch, DEFAULT_FOOTER_CONFIG.icons.branch),
     },
     separator: readString(parsed.separator, DEFAULT_FOOTER_CONFIG.separator),
-    thinkingPrefix: readString(
-      parsed.thinkingPrefix,
-      DEFAULT_FOOTER_CONFIG.thinkingPrefix,
-    ),
-    defaultThinkingLevel: readString(
-      parsed.defaultThinkingLevel,
-      DEFAULT_FOOTER_CONFIG.defaultThinkingLevel,
-    ),
-    show: {
-      model: readBoolean(show.model, DEFAULT_FOOTER_CONFIG.show.model),
-      thinking: readBoolean(show.thinking, DEFAULT_FOOTER_CONFIG.show.thinking),
-      project: readBoolean(show.project, DEFAULT_FOOTER_CONFIG.show.project),
-      branch: readBoolean(show.branch, DEFAULT_FOOTER_CONFIG.show.branch),
+    segments: {
+      model: readBoolean(segments.model, DEFAULT_FOOTER_CONFIG.segments.model),
+      project: readBoolean(
+        segments.project,
+        DEFAULT_FOOTER_CONFIG.segments.project,
+      ),
+      branch: readBoolean(
+        segments.branch,
+        DEFAULT_FOOTER_CONFIG.segments.branch,
+      ),
     },
   };
 }
@@ -78,19 +75,17 @@ export function formatFooterLine(input: FooterLineInput): string {
   } = input;
   const parts: string[] = [];
 
-  if (config.show.model) {
-    parts.push(`${config.icons.model} ${modelId}`);
+  if (config.segments.model) {
+    const thinkingSuffix = thinkingLevel ? ` (${thinkingLevel})` : "";
+
+    parts.push(`${config.icons.model} ${modelId}${thinkingSuffix}`);
   }
 
-  if (config.show.thinking) {
-    parts.push(`${config.thinkingPrefix}${thinkingLevel}`);
-  }
-
-  if (config.show.project) {
+  if (config.segments.project) {
     parts.push(`${config.icons.project} ${projectName}`);
   }
 
-  if (config.show.branch) {
+  if (config.segments.branch) {
     parts.push(`${config.icons.branch} ${branchName}`);
   }
 

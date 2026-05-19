@@ -4,9 +4,8 @@ export type FooterIconsConfig = {
   readonly branch: string;
 };
 
-export type FooterShowConfig = {
+export type FooterSegmentsConfig = {
   readonly model: boolean;
-  readonly thinking: boolean;
   readonly project: boolean;
   readonly branch: boolean;
 };
@@ -14,15 +13,13 @@ export type FooterShowConfig = {
 export type FooterConfig = {
   readonly icons: FooterIconsConfig;
   readonly separator: string;
-  readonly thinkingPrefix: string;
-  readonly defaultThinkingLevel: string;
-  readonly show: FooterShowConfig;
+  readonly segments: FooterSegmentsConfig;
 };
 
 export type FooterLineInput = {
   readonly config: FooterConfig;
   readonly modelId: string;
-  readonly thinkingLevel: string;
+  readonly thinkingLevel: string | null;
   readonly projectName: string;
   readonly branchName: string;
   readonly extensionStatuses: readonly string[];
@@ -35,11 +32,8 @@ export const DEFAULT_FOOTER_CONFIG: FooterConfig = {
     branch: "",
   },
   separator: "",
-  thinkingPrefix: "think:",
-  defaultThinkingLevel: "med",
-  show: {
+  segments: {
     model: true,
-    thinking: true,
     project: true,
     branch: true,
   },
