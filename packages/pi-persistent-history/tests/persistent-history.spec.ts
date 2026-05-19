@@ -425,6 +425,59 @@ describe("persistent-history extension", () => {
       /^\[Persistent History\]\n  Loaded 0 entries \(max: 250\)\n  Since: \d{4}\/\d{2}\/\d{2}, \d{2}:\d{2}\n  From file: \.pi\/input-history\.jsonl$/,
     );
   });
+
+  it("does not create recursive extension shortcut handler when reusing the focused editor", async () => {
+    const recorded = setup();
+    type HostEditor = {
+      readonly actionHandlers: Map<string, () => void>;
+      readonly addToHistory: jest.Mock<(text: string) => void>;
+      readonly getText: jest.Mock<() => string>;
+      readonly setText: jest.Mock<(text: string) => void>;
+      onExtensionShortcut?: (data: string) => boolean | undefined;
+    };
+
+    const defaultEditor: HostEditor = {
+      actionHandlers: new Map(),
+      addToHistory: jest.fn<(text: string) => void>(),
+      getText: jest.fn(() => ""),
+      setText: jest.fn<(text: string) => void>(),
+    };
+
+    const ctx = {
+      hasUI: true,
+      cwd: "/tmp/project",
+      ui: {
+        setEditorComponent: jest.fn((factory: unknown) => {
+          if (typeof factory !== "function") {
+            return;
+          }
+
+          const newEditor = (
+            factory as (
+              tui: unknown,
+              theme: unknown,
+              keybindings: unknown,
+            ) => HostEditor
+          )({ focusedComponent: defaultEditor }, {}, {});
+
+          if (
+            "actionHandlers" in newEditor &&
+            newEditor.actionHandlers instanceof Map &&
+            !newEditor.onExtensionShortcut
+          ) {
+            newEditor.onExtensionShortcut = (data) =>
+              defaultEditor.onExtensionShortcut?.(data);
+          }
+        }),
+      },
+    };
+
+    await recorded.sessionStartHandler!({ reason: "startup" }, ctx);
+
+    expect(() => {
+      void defaultEditor.onExtensionShortcut?.("x");
+    }).not.toThrow();
+  });
 });
 
 describe("persistent-history utils", () => {

@@ -1,5 +1,9 @@
 # @fgladisch/pi-persistent-history
 
+## Unreleased
+
+- Fix startup crash on first keypress caused by a recursive extension shortcut handler when persistent-history reuses Pi's focused editor for history injection.
+
 ## 0.4.1
 
 - Style `[Persistent History]` heading with `theme.bold(theme.fg("mdHeading", `[${HEADING}]`))` in the custom status message renderer.

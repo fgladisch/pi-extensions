@@ -295,12 +295,28 @@ type HistoryEditor = EditorComponent & {
   addToHistory?: (text: string) => void;
 };
 
+type CustomEditorLike = HistoryEditor & {
+  actionHandlers?: unknown;
+  onExtensionShortcut?: (data: string) => boolean | undefined;
+};
+
 function isHistoryEditor(value: unknown): value is HistoryEditor {
   if (!value || typeof value !== "object") {
     return false;
   }
 
   return typeof (value as HistoryEditor).addToHistory === "function";
+}
+
+function preventSelfReferentialShortcutFallback(editor: HistoryEditor): void {
+  const customEditor = editor as CustomEditorLike;
+
+  if (
+    customEditor.actionHandlers instanceof Map &&
+    !customEditor.onExtensionShortcut
+  ) {
+    customEditor.onExtensionShortcut = () => false;
+  }
 }
 
 export function injectHistoryIntoFocusedEditor(
@@ -341,6 +357,8 @@ export function injectHistoryIntoFocusedEditor(
         status: InjectionStatus.Applied,
         message: `Injected ${entries.length} entries`,
       };
+
+      preventSelfReferentialShortcutFallback(focusedComponent);
 
       return focusedComponent;
     } catch (error: unknown) {
