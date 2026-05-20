@@ -16,9 +16,8 @@ import { formatFooterLine, loadFooterConfig } from "./utils";
 
 const ANSI_PATTERN =
   /(?:\u001B\][\s\S]*?(?:\u0007|\u001B\\|\u009C))|[\u001B\u009B][[\]()#;?]*(?:\d{1,4}(?:[;:]\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]/g;
-const NO_MODEL = "no-model";
-const NO_BRANCH = "no-branch";
-const WORKSPACE_FALLBACK = "workspace";
+const NO_MODEL: string | null = null;
+const ROOT_WORKSPACE_FALLBACK = "(root)";
 const PROMPT_PREFIX_GAP = " ";
 
 function stripAnsi(value: string): string {
@@ -72,7 +71,7 @@ export default function (pi: ExtensionAPI): void {
     currentModelId = ctx.model?.id ?? NO_MODEL;
     currentThinkingLevel = pi.getThinkingLevel();
 
-    const projectName = path.basename(ctx.cwd) || WORKSPACE_FALLBACK;
+    const projectName = path.basename(ctx.cwd) || ROOT_WORKSPACE_FALLBACK;
 
     const styledPromptInputPrefix = currentConfig.promptInput.prefix
       ? ctx.ui.theme.fg("accent", currentConfig.promptInput.prefix)
@@ -111,7 +110,7 @@ export default function (pi: ExtensionAPI): void {
         },
         invalidate,
         render(width: number): string[] {
-          const branchName = footerData.getGitBranch() ?? NO_BRANCH;
+          const branchName = footerData.getGitBranch();
           const contextUsagePercent = ctx.getContextUsage()?.percent ?? null;
           const extensionStatuses = Array.from(
             footerData.getExtensionStatuses().values(),

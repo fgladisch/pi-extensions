@@ -14,10 +14,6 @@ Footer example with GitHub-renderable emoji icons:
 🤖 gpt-5.5 (med) | ⏱️ 69% | 📁 pi-extensions | 🌿 main
 ```
 
-On session start, the footer reads Pi's current thinking level via `pi.getThinkingLevel()`, so it is visible immediately. Later changes update through Pi's `thinking_level_select` event. The context segment shows Pi's current used context-window percentage when available.
-
-The extension renders Pi extension statuses from `ctx.ui.setStatus()` after the git branch, using the same separator between status entries. The full footer line is rendered with the active theme's explicit `text` color; existing ANSI styling on extension statuses is stripped first so statuses visually match the other footer segments.
-
 ## Install
 
 ```bash

@@ -88,7 +88,7 @@ export function formatFooterLine(input: FooterLineInput): string {
   } = input;
   const parts: string[] = [];
 
-  if (config.segments.model) {
+  if (config.segments.model && modelId !== null) {
     const thinkingSuffix = thinkingLevel ? ` (${thinkingLevel})` : "";
 
     parts.push(`${config.icons.model} ${modelId}${thinkingSuffix}`);
@@ -102,7 +102,7 @@ export function formatFooterLine(input: FooterLineInput): string {
     parts.push(`${config.icons.project} ${projectName}`);
   }
 
-  if (config.segments.branch) {
+  if (config.segments.branch && branchName !== null) {
     parts.push(`${config.icons.branch} ${branchName}`);
   }
 

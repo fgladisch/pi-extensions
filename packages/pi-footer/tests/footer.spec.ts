@@ -464,7 +464,7 @@ describe("pi-footer extension", () => {
     );
   });
 
-  it("uses configured fallbacks for missing model, project, and branch", async () => {
+  it("uses the project fallback and hides unavailable model and branch segments", async () => {
     const { handlers } = setup();
     const ctx = makeContext({
       cwd: "/",
@@ -479,9 +479,7 @@ describe("pi-footer extension", () => {
       footerData,
     );
 
-    expect(footer.render(200)).toEqual([
-      textColor(" no-model (medium)  󰊚 69%   workspace   no-branch"),
-    ]);
+    expect(footer.render(200)).toEqual([textColor("󰊚 69%   (root)")]);
   });
 
   it("truncates rendered footer lines to the available width", async () => {
