@@ -6,6 +6,8 @@ import { DEFAULT_FOOTER_CONFIG } from "./defaults";
 import type { FooterConfig, FooterLineInput } from "./models";
 
 const CONFIG_FILENAME = "footer.json";
+const FOOTER_END_CAP = "";
+const ANSI_SEQUENCE_PATTERN = /^\x1b\[([0-9;]*)m/;
 
 export function getFooterConfigPath(): string {
   return path.join(getAgentDir(), CONFIG_FILENAME);
@@ -17,6 +19,50 @@ function readString(value: unknown, fallback: string): string {
 
 function readBoolean(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
+}
+
+function convertBackgroundAnsiToForegroundAnsi(
+  sequence: string,
+): string | null {
+  const match = sequence.match(ANSI_SEQUENCE_PATTERN);
+  const codes = match?.at(1);
+
+  if (!codes) {
+    return null;
+  }
+
+  if (codes.startsWith("48;")) {
+    return `\x1b[38;${codes.slice(3)}m`;
+  }
+
+  const code = Number(codes);
+
+  if (!Number.isInteger(code) || code < 40 || code > 47) {
+    return null;
+  }
+
+  return `\x1b[${code - 10}m`;
+}
+
+function applyBackground(text: string, backgroundAnsi: string): string {
+  return `${backgroundAnsi}${text.replaceAll("\x1b[0m", `\x1b[0m${backgroundAnsi}`)}\x1b[49m`;
+}
+
+function formatFooterEndCap(theme: FooterLineInput["theme"]): string {
+  const capForeground = convertBackgroundAnsiToForegroundAnsi(
+    theme.getBgAnsi("customMessageBg"),
+  );
+
+  return capForeground
+    ? `${capForeground}${FOOTER_END_CAP}\x1b[39m`
+    : theme.fg("accent", FOOTER_END_CAP);
+}
+
+function formatFooterBody(
+  line: string,
+  theme: FooterLineInput["theme"],
+): string {
+  return applyBackground(line, theme.getBgAnsi("customMessageBg"));
 }
 
 function parseConfig(raw: string): FooterConfig {
@@ -108,7 +154,8 @@ export function formatFooterLine({
 
   parts.push(...extensionStatuses);
 
-  const accentParts = parts.map((part) => theme.fg("accent", part));
+  const textParts = parts.map((part) => theme.fg("text", part));
+  const line = ` ${textParts.join(` ${theme.fg("dim", config.separator)} `)} `;
 
-  return accentParts.join(` ${theme.fg("dim", config.separator)} `);
+  return `${formatFooterBody(line, theme)}${formatFooterEndCap(theme)}`;
 }

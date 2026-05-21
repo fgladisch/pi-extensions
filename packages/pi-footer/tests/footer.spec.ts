@@ -98,31 +98,69 @@ type FakeContext = {
   };
 };
 
-type FooterThemeColor = "accent" | "dim";
+type FooterThemeColor = "accent" | "dim" | "text";
+
+type FooterThemeBackground = Parameters<Theme["bg"]>[0];
 
 type FooterTestTheme = Theme & {
+  readonly bg: jest.Mock<
+    (color: FooterThemeBackground, text: string) => string
+  >;
   readonly fg: jest.Mock<(color: ThemeColor, text: string) => string>;
+  readonly getBgAnsi: jest.Mock<(color: FooterThemeBackground) => string>;
 };
 
-const DEFAULT_STYLED_LINE = `${accentColor(" gpt-5.5 (medium)")} ${dimColor("")} ${accentColor("󰊚 69%")} ${dimColor("")} ${accentColor(" pi-extensions")} ${dimColor("")} ${accentColor(" main")}`;
+const FOOTER_END_CAP_STYLED = customMessageBackgroundColor("");
+const DEFAULT_STYLED_SEGMENTS = customMessageBackground(
+  ` ${textColor(" gpt-5.5 (medium)")} ${dimColor("")} ${textColor("󰊚 69%")} ${dimColor("")} ${textColor(" pi-extensions")} ${dimColor("")} ${textColor(" main")} `,
+);
+const DEFAULT_STYLED_LINE = `${DEFAULT_STYLED_SEGMENTS}${FOOTER_END_CAP_STYLED}`;
 
 function accentColor(text: string): string {
   return `\x1b[35m${text}\x1b[0m`;
+}
+
+function textColor(text: string): string {
+  return `\x1b[37m${text}\x1b[0m`;
 }
 
 function dimColor(text: string): string {
   return `\x1b[2m${text}\x1b[0m`;
 }
 
+function customMessageBackground(text: string): string {
+  return `\x1b[48;5;236m${text.replaceAll("\x1b[0m", "\x1b[0m\x1b[48;5;236m")}\x1b[49m`;
+}
+
+function customMessageBackgroundColor(text: string): string {
+  return `\x1b[38;5;236m${text}\x1b[39m`;
+}
+
+function footerLine(text: string): string {
+  return `${customMessageBackground(`${text} `)}${FOOTER_END_CAP_STYLED}`;
+}
+
 function footerColor(color: FooterThemeColor, text: string): string {
-  return color === "accent" ? accentColor(text) : dimColor(text);
+  if (color === "accent") {
+    return accentColor(text);
+  }
+
+  if (color === "text") {
+    return textColor(text);
+  }
+
+  return dimColor(text);
 }
 
 function makeFooterTheme(): FooterTestTheme {
   const theme: Partial<Theme> = {
+    bg: jest.fn((_color: FooterThemeBackground, text: string) =>
+      customMessageBackground(text),
+    ),
     fg: jest.fn((color: ThemeColor, text: string) =>
       footerColor(color as FooterThemeColor, text),
     ),
+    getBgAnsi: jest.fn((_color: FooterThemeBackground) => "\x1b[48;5;236m"),
   };
 
   return theme as FooterTestTheme;
@@ -282,7 +320,30 @@ describe("footer utilities", () => {
         theme: makeFooterTheme(),
       }),
     ).toBe(
-      `${accentColor(" gpt-5.5")} ${dimColor("")} ${accentColor("󰊚 69%")} ${dimColor("")} ${accentColor(" pi-extensions")} ${dimColor("")} ${accentColor(" main")}`,
+      footerLine(
+        ` ${textColor(" gpt-5.5")} ${dimColor("")} ${textColor("󰊚 69%")} ${dimColor("")} ${textColor(" pi-extensions")} ${dimColor("")} ${textColor(" main")}`,
+      ),
+    );
+  });
+
+  it("renders the footer body with custom message background and appends a matching pointed pill cap", () => {
+    const { DEFAULT_FOOTER_CONFIG, formatFooterLine } = loadUtils();
+
+    expect(
+      formatFooterLine({
+        config: DEFAULT_FOOTER_CONFIG,
+        modelId: "gpt-5.5",
+        thinkingLevel: null,
+        contextUsagePercent: 69,
+        projectName: "pi-extensions",
+        branchName: "main",
+        extensionStatuses: [],
+        theme: makeFooterTheme(),
+      }),
+    ).toBe(
+      footerLine(
+        ` ${textColor(" gpt-5.5")} ${dimColor("")} ${textColor("󰊚 69%")} ${dimColor("")} ${textColor(" pi-extensions")} ${dimColor("")} ${textColor(" main")}`,
+      ),
     );
   });
 
@@ -301,7 +362,9 @@ describe("footer utilities", () => {
         theme: makeFooterTheme(),
       }),
     ).toBe(
-      `${accentColor(" gpt-5.5 (med)")} ${dimColor("")} ${accentColor("󰊚 69%")} ${dimColor("")} ${accentColor(" pi-extensions")} ${dimColor("")} ${accentColor(" main")}`,
+      footerLine(
+        ` ${textColor(" gpt-5.5 (med)")} ${dimColor("")} ${textColor("󰊚 69%")} ${dimColor("")} ${textColor(" pi-extensions")} ${dimColor("")} ${textColor(" main")}`,
+      ),
     );
   });
 
@@ -331,7 +394,9 @@ describe("footer utilities", () => {
         theme: makeFooterTheme(),
       }),
     ).toBe(
-      `${accentColor("M gpt-5.5 (high)")} ${dimColor("|")} ${accentColor("C 69%")} ${dimColor("|")} ${accentColor("P pi-extensions")}`,
+      footerLine(
+        ` ${textColor("M gpt-5.5 (high)")} ${dimColor("|")} ${textColor("C 69%")} ${dimColor("|")} ${textColor("P pi-extensions")}`,
+      ),
     );
   });
 
@@ -377,9 +442,11 @@ describe("pi-footer extension", () => {
     );
 
     expect(footer.render(200)).toEqual([
-      `${accentColor(" gpt-5.5 (off)")} ${dimColor("")} ${accentColor("󰊚 69%")} ${dimColor("")} ${accentColor(" pi-extensions")} ${dimColor("")} ${accentColor(" main")}`,
+      footerLine(
+        ` ${textColor(" gpt-5.5 (off)")} ${dimColor("")} ${textColor("󰊚 69%")} ${dimColor("")} ${textColor(" pi-extensions")} ${dimColor("")} ${textColor(" main")}`,
+      ),
     ]);
-    expect(theme.fg).toHaveBeenCalledWith("accent", " gpt-5.5 (off)");
+    expect(theme.fg).toHaveBeenCalledWith("text", " gpt-5.5 (off)");
     expect(theme.fg).toHaveBeenCalledWith("dim", "");
   });
 
@@ -451,10 +518,12 @@ describe("pi-footer extension", () => {
     );
 
     expect(footer.render(200)).toEqual([
-      `${DEFAULT_STYLED_LINE} ${dimColor("")} ${accentColor("🪨 caveman lite")} ${dimColor("")} ${accentColor("preset:dev")}`,
+      footerLine(
+        ` ${textColor(" gpt-5.5 (medium)")} ${dimColor("")} ${textColor("󰊚 69%")} ${dimColor("")} ${textColor(" pi-extensions")} ${dimColor("")} ${textColor(" main")} ${dimColor("")} ${textColor("🪨 caveman lite")} ${dimColor("")} ${textColor("preset:dev")}`,
+      ),
     ]);
-    expect(theme.fg).toHaveBeenCalledWith("accent", "🪨 caveman lite");
-    expect(theme.fg).toHaveBeenCalledWith("accent", "preset:dev");
+    expect(theme.fg).toHaveBeenCalledWith("text", "🪨 caveman lite");
+    expect(theme.fg).toHaveBeenCalledWith("text", "preset:dev");
   });
 
   it("strips existing ANSI before coloring extension statuses", async () => {
@@ -474,9 +543,11 @@ describe("pi-footer extension", () => {
     );
 
     expect(footer.render(200)).toEqual([
-      `${DEFAULT_STYLED_LINE} ${dimColor("")} ${accentColor("preset:dev")}`,
+      footerLine(
+        ` ${textColor(" gpt-5.5 (medium)")} ${dimColor("")} ${textColor("󰊚 69%")} ${dimColor("")} ${textColor(" pi-extensions")} ${dimColor("")} ${textColor(" main")} ${dimColor("")} ${textColor("preset:dev")}`,
+      ),
     ]);
-    expect(theme.fg).toHaveBeenCalledWith("accent", "preset:dev");
+    expect(theme.fg).toHaveBeenCalledWith("text", "preset:dev");
   });
 
   it("uses the project fallback and hides unavailable model and branch segments", async () => {
@@ -495,7 +566,9 @@ describe("pi-footer extension", () => {
     );
 
     expect(footer.render(200)).toEqual([
-      `${accentColor("󰊚 69%")} ${dimColor("")} ${accentColor(" (root)")}`,
+      footerLine(
+        ` ${textColor("󰊚 69%")} ${dimColor("")} ${textColor(" (root)")}`,
+      ),
     ]);
   });
 
@@ -511,7 +584,7 @@ describe("pi-footer extension", () => {
       footerData,
     );
 
-    expect(footer.render(8)).toEqual(["\x1b[35m gpt-5."]);
+    expect(footer.render(8)).toEqual(["\x1b[48;5;236m \x1b[37m gpt-5"]);
   });
 
   it("omits context segment when context usage is unavailable", async () => {
@@ -529,7 +602,9 @@ describe("pi-footer extension", () => {
     );
 
     expect(footer.render(200)).toEqual([
-      `${accentColor(" gpt-5.5 (medium)")} ${dimColor("")} ${accentColor(" pi-extensions")} ${dimColor("")} ${accentColor(" main")}`,
+      footerLine(
+        ` ${textColor(" gpt-5.5 (medium)")} ${dimColor("")} ${textColor(" pi-extensions")} ${dimColor("")} ${textColor(" main")}`,
+      ),
     ]);
   });
 

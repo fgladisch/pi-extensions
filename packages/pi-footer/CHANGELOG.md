@@ -8,7 +8,8 @@
 
 ### Patch Changes
 
-- Render footer items and extension statuses with the explicit theme `text` color instead of leaving footer items unstyled and coloring extension statuses with `dim`.
+- Add a `customMessageBg` background, horizontal padding, and matching pointed cap to the footer.
+- Render footer items and extension statuses with the explicit theme `text` color.
 
 ## 0.3.0
 
