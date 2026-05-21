@@ -7,18 +7,6 @@ Monorepo for personal Pi extensions.
 This root workspace holds shared tooling. Source-of-truth extension code
 and full documentation live in `packages/`.
 
-## Development Layout
-
-Each package keeps extension source under `packages/pi-*/extensions/`:
-
-- `index.ts` is the Pi extension entrypoint.
-- `utils.ts` (or `utils/*`) contains package-local helpers.
-- `models/*.model.ts` contains package-local type aliases/models.
-- `models/*.enum.ts` contains package-local enums.
-- `models/index.ts` is the package-local barrel; extension files import models/enums from `./models`.
-
-Legacy `extensions/types.ts` files are not used.
-
 ## Packages
 
 - [`@fgladisch/pi-bash-approval`](packages/pi-bash-approval/README.md): Intercepts Pi bash calls and asks for approval unless a command matches your allow-list.
@@ -28,6 +16,16 @@ Legacy `extensions/types.ts` files are not used.
 - [`@fgladisch/pi-persistent-history`](packages/pi-persistent-history/README.md): Persists prompt input history per project and preloads it for up/down recall across sessions.
 - [`@fgladisch/pi-welcome-message`](packages/pi-welcome-message/README.md): Shows a configurable startup and `/new` workspace summary with package info, git status, useful resource links, and optional logo header.
 - [`@fgladisch/pi-zsh-shell`](packages/pi-zsh-shell/README.md): Runs Pi user bash commands through zsh and sources Pi-specific functions from `~/.pi/agent/zsh-functions`.
+
+## Development Layout
+
+Each package keeps extension source under `packages/pi-*/extensions/`:
+
+- `index.ts` is the Pi extension entrypoint.
+- `utils.ts` (or `utils/*`) contains package-local helpers.
+- `models/*.model.ts` contains package-local type aliases/models.
+- `models/*.enum.ts` contains package-local enums.
+- `models/index.ts` is the package-local barrel; extension files import models/enums from `./models`.
 
 ## Releasing (Changesets + CI + npm Trusted Publisher)
 
