@@ -1,5 +1,6 @@
 import {
   CustomEditor,
+  ExtensionContext,
   type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
@@ -8,7 +9,6 @@ import * as path from "node:path";
 import { DEFAULT_FOOTER_CONFIG } from "./defaults";
 import type {
   FooterConfig,
-  FooterContext,
   ModelSelectEvent,
   ThinkingLevelEvent,
 } from "./models";
@@ -62,7 +62,7 @@ export default function (pi: ExtensionAPI): void {
     requestFooterRender?.();
   }
 
-  async function applyFooter(ctx: FooterContext): Promise<void> {
+  async function applyFooter(ctx: ExtensionContext): Promise<void> {
     if (!ctx.hasUI) {
       return;
     }
@@ -135,13 +135,14 @@ export default function (pi: ExtensionAPI): void {
             projectName,
             branchName,
             extensionStatuses,
+            theme,
           });
 
           cachedWidth = width;
           cachedBranchName = branchName;
           cachedContextUsagePercent = contextUsagePercent;
           cachedExtensionStatusesKey = extensionStatusesKey;
-          cachedLines = [theme.fg("text", truncateToWidth(line, width))];
+          cachedLines = [truncateToWidth(line, width)];
 
           return cachedLines;
         },
@@ -150,7 +151,7 @@ export default function (pi: ExtensionAPI): void {
   }
 
   pi.on("session_start", async (_event, ctx) => {
-    await applyFooter(ctx as FooterContext);
+    await applyFooter(ctx);
   });
 
   pi.on("thinking_level_select", (event) => {
@@ -178,7 +179,7 @@ export default function (pi: ExtensionAPI): void {
   pi.registerCommand("footer-reload", {
     description: "Reload pi-footer config",
     handler: async (_args, ctx) => {
-      const footerCtx = ctx as FooterContext;
+      const footerCtx = ctx;
 
       await applyFooter(footerCtx);
 

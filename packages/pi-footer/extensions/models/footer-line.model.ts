@@ -1,5 +1,9 @@
 import type { FooterConfig } from "./footer-config.model";
 
+type FooterLineTheme = {
+  readonly fg: (color: "accent" | "dim", text: string) => string;
+};
+
 export type FooterLineInput = {
   readonly config: FooterConfig;
   readonly modelId: string | null;
@@ -8,4 +12,5 @@ export type FooterLineInput = {
   readonly projectName: string;
   readonly branchName: string | null;
   readonly extensionStatuses: readonly string[];
+  readonly theme: FooterLineTheme;
 };

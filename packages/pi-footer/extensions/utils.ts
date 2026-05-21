@@ -76,16 +76,16 @@ export async function loadFooterConfig(): Promise<FooterConfig> {
   }
 }
 
-export function formatFooterLine(input: FooterLineInput): string {
-  const {
-    config,
-    modelId,
-    thinkingLevel,
-    contextUsagePercent,
-    projectName,
-    branchName,
-    extensionStatuses,
-  } = input;
+export function formatFooterLine({
+  config,
+  modelId,
+  thinkingLevel,
+  contextUsagePercent,
+  projectName,
+  branchName,
+  extensionStatuses,
+  theme,
+}: FooterLineInput): string {
   const parts: string[] = [];
 
   if (config.segments.model && modelId !== null) {
@@ -108,5 +108,7 @@ export function formatFooterLine(input: FooterLineInput): string {
 
   parts.push(...extensionStatuses);
 
-  return parts.join(` ${config.separator} `);
+  const accentParts = parts.map((part) => theme.fg("accent", part));
+
+  return accentParts.join(` ${theme.fg("dim", config.separator)} `);
 }

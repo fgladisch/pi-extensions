@@ -14,6 +14,8 @@ Footer example with GitHub-renderable emoji icons:
 🤖 gpt-5.5 (med) | ⏱️ 69% | 📁 pi-extensions | 🌿 main
 ```
 
+Footer items render in the active theme's accent color. Separators render in the active theme's dim color.
+
 ## Install
 
 ```bash
