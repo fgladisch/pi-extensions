@@ -12,7 +12,7 @@ Footer example:
 
 ![Footer example](../../assets/example.png)
 
-Footer items render in the active theme's text color over the theme's `customMessageBg` background, with padding before the first item and before the end cap. Separators render in the active theme's dim color. The terminal footer ends with a `` cap colored to match `customMessageBg` so the footer reads like a pointed pill.
+Footer items render in the active theme's text color over the theme's `customMessageBg` background, with padding before the first item and before the end cap. Separators render in the active theme's dim color.
 
 ## Install
 
