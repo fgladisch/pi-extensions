@@ -84,7 +84,7 @@ type FakeFooterData = {
 type FakeContext = {
   readonly hasUI: boolean;
   readonly cwd: string;
-  readonly model?: { readonly id: string };
+  readonly model?: { readonly id: string; readonly provider?: string };
   readonly getContextUsage: jest.Mock<
     () => { readonly percent: number | null } | undefined
   >;
@@ -312,6 +312,7 @@ describe("footer utilities", () => {
       formatFooterLine({
         config: DEFAULT_FOOTER_CONFIG,
         modelId: "gpt-5.5",
+        providerName: null,
         thinkingLevel: null,
         contextUsagePercent: 69,
         projectName: "pi-extensions",
@@ -333,6 +334,7 @@ describe("footer utilities", () => {
       formatFooterLine({
         config: DEFAULT_FOOTER_CONFIG,
         modelId: "gpt-5.5",
+        providerName: null,
         thinkingLevel: null,
         contextUsagePercent: 69,
         projectName: "pi-extensions",
@@ -354,6 +356,7 @@ describe("footer utilities", () => {
       formatFooterLine({
         config: DEFAULT_FOOTER_CONFIG,
         modelId: "gpt-5.5",
+        providerName: null,
         thinkingLevel: "med",
         contextUsagePercent: 69,
         projectName: "pi-extensions",
@@ -364,6 +367,70 @@ describe("footer utilities", () => {
     ).toBe(
       footerLine(
         ` ${textColor(" gpt-5.5 (med)")} ${dimColor("")} ${textColor("󰊚 69%")} ${dimColor("")} ${textColor(" pi-extensions")} ${dimColor("")} ${textColor(" main")}`,
+      ),
+    );
+  });
+
+  it("omits the provider segment when enabled but the provider name is unknown", () => {
+    const { DEFAULT_FOOTER_CONFIG, formatFooterLine } = loadUtils();
+    const config = {
+      ...DEFAULT_FOOTER_CONFIG,
+      segments: { ...DEFAULT_FOOTER_CONFIG.segments, provider: true },
+    };
+
+    const lineWithoutProvider = formatFooterLine({
+      config: DEFAULT_FOOTER_CONFIG,
+      modelId: "gpt-5.5",
+      providerName: null,
+      thinkingLevel: null,
+      contextUsagePercent: 69,
+      projectName: "pi-extensions",
+      branchName: "main",
+      extensionStatuses: [],
+      theme: makeFooterTheme(),
+    });
+    const lineWithProviderEnabledButUnknown = formatFooterLine({
+      config,
+      modelId: "gpt-5.5",
+      providerName: null,
+      thinkingLevel: null,
+      contextUsagePercent: 69,
+      projectName: "pi-extensions",
+      branchName: "main",
+      extensionStatuses: [],
+      theme: makeFooterTheme(),
+    });
+
+    expect(lineWithProviderEnabledButUnknown).toBe(lineWithoutProvider);
+  });
+
+  it("renders the provider segment before the model when enabled", async () => {
+    (fs.readFile as jest.Mock<any>).mockResolvedValue(
+      JSON.stringify({
+        icons: { provider: "P", model: "M", context: "C", project: "D" },
+        separator: "|",
+        segments: { provider: true, branch: false },
+      }),
+    );
+    const { loadFooterConfig, formatFooterLine } = loadUtils();
+
+    const config = await loadFooterConfig();
+
+    expect(
+      formatFooterLine({
+        config,
+        modelId: "claude-opus-4-7",
+        providerName: "claude-bridge",
+        thinkingLevel: "high",
+        contextUsagePercent: 69,
+        projectName: "pi-extensions",
+        branchName: "main",
+        extensionStatuses: [],
+        theme: makeFooterTheme(),
+      }),
+    ).toBe(
+      footerLine(
+        ` ${textColor("P claude-bridge")} ${dimColor("|")} ${textColor("M claude-opus-4-7 (high)")} ${dimColor("|")} ${textColor("C 69%")} ${dimColor("|")} ${textColor("D pi-extensions")}`,
       ),
     );
   });
@@ -386,6 +453,7 @@ describe("footer utilities", () => {
       formatFooterLine({
         config,
         modelId: "gpt-5.5",
+        providerName: null,
         thinkingLevel: "high",
         contextUsagePercent: 69,
         projectName: "pi-extensions",
@@ -631,6 +699,38 @@ describe("pi-footer extension", () => {
 
     expect(branchRender).toHaveBeenCalledTimes(4);
     expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it("requests render when the provider changes even if the model id stays the same", async () => {
+    const { handlers } = setup();
+    const ctx = makeContext({
+      model: { id: "claude-opus-4-7", provider: "anthropic" },
+    });
+    await trigger(handlers, "session_start", { reason: "startup" }, ctx);
+
+    const branchRender = jest.fn();
+    const { footerData } = makeFooterData();
+    const footer = getFooterFactory(ctx)(
+      { requestRender: branchRender },
+      makeFooterTheme(),
+      footerData,
+    );
+
+    await trigger(
+      handlers,
+      "model_select",
+      { model: { id: "claude-opus-4-7", provider: "anthropic" } },
+      ctx,
+    );
+    await trigger(
+      handlers,
+      "model_select",
+      { model: { id: "claude-opus-4-7", provider: "claude-bridge" } },
+      ctx,
+    );
+    footer.dispose?.();
+
+    expect(branchRender).toHaveBeenCalledTimes(1);
   });
 
   it("reloads config and reapplies the footer", async () => {

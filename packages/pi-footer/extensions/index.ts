@@ -17,6 +17,7 @@ import { formatFooterLine, loadFooterConfig } from "./utils";
 const ANSI_PATTERN =
   /(?:\u001B\][\s\S]*?(?:\u0007|\u001B\\|\u009C))|[\u001B\u009B][[\]()#;?]*(?:\d{1,4}(?:[;:]\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]/g;
 const NO_MODEL: string | null = null;
+const NO_PROVIDER: string | null = null;
 const ROOT_WORKSPACE_FALLBACK = "(root)";
 const PROMPT_PREFIX_GAP = " ";
 
@@ -54,6 +55,7 @@ export default function (pi: ExtensionAPI): void {
   let currentConfig: FooterConfig = DEFAULT_FOOTER_CONFIG;
   let currentThinkingLevel: string | null = null;
   let currentModelId = NO_MODEL;
+  let currentProviderName = NO_PROVIDER;
   let invalidateFooterRender: (() => void) | null = null;
   let requestFooterRender: (() => void) | null = null;
 
@@ -69,6 +71,7 @@ export default function (pi: ExtensionAPI): void {
 
     currentConfig = await loadFooterConfig();
     currentModelId = ctx.model?.id ?? NO_MODEL;
+    currentProviderName = ctx.model?.provider ?? NO_PROVIDER;
     currentThinkingLevel = pi.getThinkingLevel();
 
     const projectName = path.basename(ctx.cwd) || ROOT_WORKSPACE_FALLBACK;
@@ -130,6 +133,7 @@ export default function (pi: ExtensionAPI): void {
           const line = formatFooterLine({
             config: currentConfig,
             modelId: currentModelId,
+            providerName: currentProviderName,
             thinkingLevel: currentThinkingLevel,
             contextUsagePercent,
             projectName,
@@ -168,11 +172,22 @@ export default function (pi: ExtensionAPI): void {
   pi.on("model_select", (event) => {
     const { model } = event as ModelSelectEvent;
 
-    if (typeof model?.id !== "string" || model.id === currentModelId) {
+    if (typeof model?.id !== "string") {
+      return;
+    }
+
+    const nextProviderName =
+      typeof model.provider === "string" ? model.provider : NO_PROVIDER;
+
+    if (
+      model.id === currentModelId &&
+      nextProviderName === currentProviderName
+    ) {
       return;
     }
 
     currentModelId = model.id;
+    currentProviderName = nextProviderName;
     requestChangedFooterRender();
   });
 

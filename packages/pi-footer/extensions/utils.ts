@@ -86,6 +86,10 @@ function parseConfig(raw: string): FooterConfig {
       context: readString(icons.context, DEFAULT_FOOTER_CONFIG.icons.context),
       project: readString(icons.project, DEFAULT_FOOTER_CONFIG.icons.project),
       branch: readString(icons.branch, DEFAULT_FOOTER_CONFIG.icons.branch),
+      provider: readString(
+        icons.provider,
+        DEFAULT_FOOTER_CONFIG.icons.provider,
+      ),
     },
     promptInput: {
       prefix: readString(
@@ -108,6 +112,10 @@ function parseConfig(raw: string): FooterConfig {
         segments.branch,
         DEFAULT_FOOTER_CONFIG.segments.branch,
       ),
+      provider: readBoolean(
+        segments.provider,
+        DEFAULT_FOOTER_CONFIG.segments.provider,
+      ),
     },
   };
 }
@@ -125,6 +133,7 @@ export async function loadFooterConfig(): Promise<FooterConfig> {
 export function formatFooterLine({
   config,
   modelId,
+  providerName,
   thinkingLevel,
   contextUsagePercent,
   projectName,
@@ -133,6 +142,10 @@ export function formatFooterLine({
   theme,
 }: FooterLineInput): string {
   const parts: string[] = [];
+
+  if (config.segments.provider && providerName !== null) {
+    parts.push(`${config.icons.provider} ${providerName}`);
+  }
 
   if (config.segments.model && modelId !== null) {
     const thinkingSuffix = thinkingLevel ? ` (${thinkingLevel})` : "";
