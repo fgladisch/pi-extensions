@@ -81,6 +81,11 @@ approval checks focus on actual commands:
   treated as outer command-chain separators
 - assignment prefixes before commands are stripped
   (for example: `FOO=bar npm test` evaluates as `npm test`)
+- command substitutions inside assignment tokens are evaluated by their inner
+  command, including assignment-only segments and assignment prefixes (for
+  example: `tmp=$(mktemp -d /tmp/foo-XXXXXX)` evaluates as
+  `mktemp -d /tmp/foo-XXXXXX`, and `FOO=$(./setup) npm test` checks both
+  `./setup` and `npm test`)
 
 ## Approval prompt
 

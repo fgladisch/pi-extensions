@@ -33,6 +33,7 @@ const COMMENT_PREFIX = "#";
 const VARIABLE_ASSIGNMENT_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const REDIRECTION_OPERATOR_PATTERN =
   /^(?:\d*)?(?:<|>|>>|<>|>&|<&|<<|<<<|&>|&>>)$/;
+const MAX_NORMALIZATION_DEPTH = 8;
 
 const DECLARATION_ONLY_HEADS = new Set([
   "for",
@@ -298,8 +299,91 @@ function splitCommand(command: string): string[] {
   return state.parts.map((part) => part.trim()).filter(Boolean);
 }
 
+function flushToken(tokens: string[], current: string): string {
+  if (current) {
+    tokens.push(current);
+  }
+
+  return "";
+}
+
+function isWhitespaceChar(char: string): boolean {
+  return /\s/.test(char);
+}
+
 function tokenizeSegment(segment: string): string[] {
-  return segment.trim().split(/\s+/).filter(Boolean);
+  const tokens: string[] = [];
+  let current = "";
+  let quote: '"' | "'" | null = null;
+  let commandSubstitutionDepth = 0;
+  let index = 0;
+
+  while (index < segment.length) {
+    const char = segment.at(index) ?? "";
+    const nextChar = segment.at(index + 1);
+
+    if (char === "\\" && nextChar !== undefined) {
+      current += `${char}${nextChar}`;
+      index += 2;
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = null;
+      }
+
+      if (quote !== "'" && char === "$" && nextChar === "(") {
+        commandSubstitutionDepth += 1;
+        current += "$(";
+        index += 2;
+        continue;
+      }
+
+      current += char;
+      index += 1;
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+      current += char;
+      index += 1;
+      continue;
+    }
+
+    if (char === "$" && nextChar === "(") {
+      commandSubstitutionDepth += 1;
+      current += "$(";
+      index += 2;
+      continue;
+    }
+
+    if (commandSubstitutionDepth > 0) {
+      if (char === "(") {
+        commandSubstitutionDepth += 1;
+      } else if (char === ")") {
+        commandSubstitutionDepth -= 1;
+      }
+
+      current += char;
+      index += 1;
+      continue;
+    }
+
+    if (isWhitespaceChar(char)) {
+      current = flushToken(tokens, current);
+      index += 1;
+      continue;
+    }
+
+    current += char;
+    index += 1;
+  }
+
+  flushToken(tokens, current);
+
+  return tokens;
 }
 
 function isVariableAssignmentToken(token: string): boolean {
@@ -322,22 +406,163 @@ function isRedirectionOperatorToken(token: string | undefined): boolean {
   return REDIRECTION_OPERATOR_PATTERN.test(token);
 }
 
-function normalizeCommandSegment(segment: string): string | null {
+function assignmentValue(token: string): string | null {
+  if (!isVariableAssignmentToken(token)) {
+    return null;
+  }
+
+  const equalsIndex = token.indexOf("=");
+
+  if (equalsIndex < 0) {
+    return null;
+  }
+
+  return token.slice(equalsIndex + 1);
+}
+
+function readCommandSubstitution(
+  value: string,
+  substitutionStartIndex: number,
+): { readonly nextIndex: number; readonly substitution: string } | null {
+  const startIndex = substitutionStartIndex + 2;
+  let depth = 1;
+  let innerQuote: '"' | "'" | null = null;
+  let index = startIndex;
+
+  while (index < value.length && depth > 0) {
+    const char = value.at(index) ?? "";
+    const nextChar = value.at(index + 1);
+
+    if (char === "\\" && nextChar !== undefined) {
+      index += 2;
+      continue;
+    }
+
+    if (innerQuote) {
+      if (char === innerQuote) {
+        innerQuote = null;
+      }
+
+      index += 1;
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      innerQuote = char;
+      index += 1;
+      continue;
+    }
+
+    if (char === "$" && nextChar === "(") {
+      depth += 1;
+      index += 2;
+      continue;
+    }
+
+    if (char === ")") {
+      depth -= 1;
+
+      if (depth === 0) {
+        return {
+          nextIndex: index + 1,
+          substitution: value.slice(startIndex, index).trim(),
+        };
+      }
+    }
+
+    index += 1;
+  }
+
+  return null;
+}
+
+function findCommandSubstitutions(value: string): string[] {
+  const substitutions: string[] = [];
+  let quote: '"' | "'" | null = null;
+  let index = 0;
+
+  while (index < value.length) {
+    const char = value.at(index) ?? "";
+    const nextChar = value.at(index + 1);
+
+    if (char === "\\" && nextChar !== undefined) {
+      index += 2;
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = null;
+        index += 1;
+        continue;
+      }
+
+      if (quote !== '"' || char !== "$" || nextChar !== "(") {
+        index += 1;
+        continue;
+      }
+    } else if (char === '"' || char === "'") {
+      quote = char;
+      index += 1;
+      continue;
+    } else if (char !== "$" || nextChar !== "(") {
+      index += 1;
+      continue;
+    }
+
+    const result = readCommandSubstitution(value, index);
+
+    if (!result) {
+      index += 2;
+      continue;
+    }
+
+    substitutions.push(result.substitution);
+    index = result.nextIndex;
+  }
+
+  return substitutions.filter(Boolean);
+}
+
+function normalizeAssignmentSubstitutions(
+  tokens: readonly string[],
+  depth: number,
+): string[] {
+  return tokens.flatMap((token) => {
+    const value = assignmentValue(token);
+
+    if (value === null) {
+      return [];
+    }
+
+    return findCommandSubstitutions(value).flatMap((substitution) =>
+      normalizeCommandSegments(substitution, depth + 1),
+    );
+  });
+}
+
+function normalizeCommandSegments(segment: string, depth = 0): string[] {
+  if (depth > MAX_NORMALIZATION_DEPTH) {
+    const trimmedSegment = segment.trim();
+
+    return trimmedSegment ? [trimmedSegment] : [];
+  }
+
   let tokens = tokenizeSegment(segment);
 
   if (tokens.length === 0) {
-    return null;
+    return [];
   }
 
   while (tokens.length > 0) {
     const firstToken = tokens.at(0);
 
     if (!firstToken) {
-      return null;
+      return [];
     }
 
     if (DECLARATION_ONLY_HEADS.has(firstToken)) {
-      return null;
+      return [];
     }
 
     if (!STRIPPABLE_CONTROL_HEADS.has(firstToken)) {
@@ -348,19 +573,19 @@ function normalizeCommandSegment(segment: string): string | null {
   }
 
   if (tokens.length === 0) {
-    return null;
+    return [];
   }
 
   if (isConditionTestHead(tokens.at(0))) {
-    return null;
+    return [];
   }
 
   if (isRedirectionOperatorToken(tokens.at(0))) {
-    return null;
+    return [];
   }
 
   if (tokens.at(0) === "export") {
-    return null;
+    return [];
   }
 
   let assignmentPrefixLength = 0;
@@ -375,17 +600,22 @@ function normalizeCommandSegment(segment: string): string | null {
     assignmentPrefixLength += 1;
   }
 
+  const assignmentCommands = normalizeAssignmentSubstitutions(
+    tokens.slice(0, assignmentPrefixLength),
+    depth,
+  );
+
   if (assignmentPrefixLength === tokens.length) {
-    return null;
+    return assignmentCommands;
   }
 
   const commandTokens = tokens.slice(assignmentPrefixLength);
 
   if (commandTokens.length === 0) {
-    return null;
+    return assignmentCommands;
   }
 
-  return commandTokens.join(" ");
+  return [...assignmentCommands, commandTokens.join(" ")];
 }
 
 function suggestPrefixPattern(command: string): string | null {
@@ -424,9 +654,9 @@ export function evaluateCommand(
   const rawSegments = config.splitChains
     ? splitCommand(command)
     : [trimmedCommand];
-  const segments = rawSegments
-    .map((segment) => normalizeCommandSegment(segment))
-    .filter((segment): segment is string => segment !== null);
+  const segments = rawSegments.flatMap((segment) =>
+    normalizeCommandSegments(segment),
+  );
 
   if (segments.length === 0) {
     return { allMatch: true };

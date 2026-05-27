@@ -743,6 +743,75 @@ describe("bash-approval extension", () => {
       expect(captured).not.toContain("Allow always: sort):*");
     });
 
+    it("suggests command substitutions inside assignment-only segments", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "printf:*\n",
+      });
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pick: (options) => {
+          captured = options;
+
+          return "Deny";
+        },
+      });
+
+      await toolCallHandler!(
+        bashEvent(
+          'findings_dir=$(mktemp -d "${TMPDIR:-/tmp}/simplify-findings-XXXXXX")\nprintf \'%s\' "$findings_dir"',
+        ),
+        ctx,
+      );
+
+      expect(captured).toContain("Allow always: mktemp -d:*");
+      expect(captured).not.toContain(
+        'Allow always: -d "${TMPDIR:-/tmp}/simplify-findings-XXXXXX"):*',
+      );
+    });
+
+    it("suggests quoted command substitutions inside assignments", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "printf:*\n",
+      });
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pick: (options) => {
+          captured = options;
+
+          return "Deny";
+        },
+      });
+
+      await toolCallHandler!(
+        bashEvent('tmp="$(mktemp -d /tmp/foo-XXXXXX)" && printf \'%s\' "$tmp"'),
+        ctx,
+      );
+
+      expect(captured).toContain("Allow always: mktemp -d:*");
+      expect(captured).not.toContain("Allow always: -d:*");
+    });
+
+    it("checks command substitutions before assignment-prefixed commands", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "npm test:*\n",
+      });
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pick: (options) => {
+          captured = options;
+
+          return "Deny";
+        },
+      });
+
+      await toolCallHandler!(
+        bashEvent("FOO=$(./evil.sh) npm test -- --runInBand"),
+        ctx,
+      );
+
+      expect(captured).toContain("Allow always: ./evil.sh:*");
+    });
+
     it("does not suggest redirection-only prefixes from shell groups", async () => {
       const { toolCallHandler } = setup({
         allowListFile: "git rev-parse:*\ngit diff:*\ntrue\n",
