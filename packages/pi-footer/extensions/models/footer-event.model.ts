@@ -5,5 +5,6 @@ export type ThinkingLevelEvent = {
 export type ModelSelectEvent = {
   readonly model?: {
     readonly id?: unknown;
+    readonly provider?: unknown;
   };
 };

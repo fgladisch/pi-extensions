@@ -6,6 +6,7 @@ export const DEFAULT_FOOTER_CONFIG: FooterConfig = {
     context: "󰊚",
     project: "",
     branch: "",
+    provider: "",
   },
   promptInput: {
     prefix: "➜",
@@ -16,5 +17,6 @@ export const DEFAULT_FOOTER_CONFIG: FooterConfig = {
     context: true,
     project: true,
     branch: true,
+    provider: false,
   },
 };

@@ -31,6 +31,7 @@ Emoji icon example:
 ```json
 {
   "icons": {
+    "provider": "☁️",
     "model": "🤖",
     "context": "⏱️",
     "project": "📁",
@@ -41,6 +42,7 @@ Emoji icon example:
   },
   "separator": "|",
   "segments": {
+    "provider": true,
     "model": true,
     "context": true,
     "project": true,
@@ -50,6 +52,8 @@ Emoji icon example:
 ```
 
 Partial config is supported. Invalid fields fall back to defaults. Set `promptInput.prefix` to customize the arrow shown next to the prompt input; it renders in the active theme's accent color. Use an empty string to hide it.
+
+The `provider` segment is off by default. Enable it to distinguish models served by different providers (for example, `anthropic` via the official API versus a custom provider such as `claude-bridge`). When enabled it renders immediately before the model segment.
 
 ## Commands
 
