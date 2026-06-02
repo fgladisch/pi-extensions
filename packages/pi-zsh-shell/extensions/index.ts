@@ -12,10 +12,18 @@ function shellQuote(value: string) {
 
 function getZshPath() {
   if (process.env.PI_ZSH_SHELL) {
-    return process.env.PI_ZSH_SHELL;
+    const envPath = process.env.PI_ZSH_SHELL;
+
+    if (path.isAbsolute(envPath)) {
+      return envPath;
+    }
   }
 
-  if (process.env.SHELL && basename(process.env.SHELL) === "zsh") {
+  if (
+    process.env.SHELL &&
+    basename(process.env.SHELL) === "zsh" &&
+    path.isAbsolute(process.env.SHELL)
+  ) {
     return process.env.SHELL;
   }
 

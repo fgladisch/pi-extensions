@@ -232,6 +232,49 @@ function stepInsideQuote(
   return 1;
 }
 
+function stepOutsideBacktick(
+  char: string,
+  nextChar: string | undefined,
+  state: SplitState,
+): number {
+  if (char === "\\" && nextChar !== undefined) {
+    state.current += `${char}${nextChar}`;
+    return 2;
+  }
+
+  if (char === "`") {
+    state.backtickDepth -= 1;
+    state.current += char;
+    return 1;
+  }
+
+  if (char === "$" && nextChar === "(") {
+    state.commandSubstitutionDepth += 1;
+    state.current += "$(";
+    return 2;
+  }
+
+  if ((char === "<" || char === ">") && nextChar === "(") {
+    state.commandSubstitutionDepth += 1;
+    state.current += `${char}(`;
+    return 2;
+  }
+
+  if (state.commandSubstitutionDepth > 0) {
+    if (char === "(") {
+      state.commandSubstitutionDepth += 1;
+    } else if (char === ")") {
+      state.commandSubstitutionDepth -= 1;
+    }
+
+    state.current += char;
+    return 1;
+  }
+
+  state.current += char;
+  return 1;
+}
+
 function stepOutsideQuote(
   char: string,
   nextChar: string | undefined,
@@ -243,9 +286,21 @@ function stepOutsideQuote(
     return 1;
   }
 
+  if (char === "`") {
+    state.backtickDepth += 1;
+    state.current += char;
+    return 1;
+  }
+
   if (char === "$" && nextChar === "(") {
     state.commandSubstitutionDepth += 1;
     state.current += "$(";
+    return 2;
+  }
+
+  if ((char === "<" || char === ">") && nextChar === "(") {
+    state.commandSubstitutionDepth += 1;
+    state.current += `${char}(`;
     return 2;
   }
 
@@ -277,6 +332,7 @@ function stepOutsideQuote(
 function splitCommand(command: string): string[] {
   const state: SplitState = {
     commandSubstitutionDepth: 0,
+    backtickDepth: 0,
     current: "",
     parts: [],
     quote: null,
@@ -287,9 +343,13 @@ function splitCommand(command: string): string[] {
     const char = command.at(index) ?? "";
     const nextChar = command.at(index + 1);
 
-    index += state.quote
-      ? stepInsideQuote(char, nextChar, state)
-      : stepOutsideQuote(char, nextChar, state);
+    if (state.backtickDepth > 0) {
+      index += stepOutsideBacktick(char, nextChar, state);
+    } else if (state.quote) {
+      index += stepInsideQuote(char, nextChar, state);
+    } else {
+      index += stepOutsideQuote(char, nextChar, state);
+    }
   }
 
   if (state.current.trim()) {
@@ -316,15 +376,61 @@ function tokenizeSegment(segment: string): string[] {
   let current = "";
   let quote: '"' | "'" | null = null;
   let commandSubstitutionDepth = 0;
+  let backtickDepth = 0;
   let index = 0;
 
   while (index < segment.length) {
     const char = segment.at(index) ?? "";
     const nextChar = segment.at(index + 1);
 
-    if (char === "\\" && nextChar !== undefined) {
+    if (backtickDepth === 0 && char === "\\" && nextChar !== undefined) {
       current += `${char}${nextChar}`;
       index += 2;
+      continue;
+    }
+
+    if (backtickDepth > 0) {
+      if (char === "\\" && nextChar !== undefined) {
+        current += `${char}${nextChar}`;
+        index += 2;
+        continue;
+      }
+
+      if (char === "`") {
+        backtickDepth -= 1;
+        current += char;
+        index += 1;
+        continue;
+      }
+
+      if (char === "$" && nextChar === "(") {
+        commandSubstitutionDepth += 1;
+        current += "$(";
+        index += 2;
+        continue;
+      }
+
+      if ((char === "<" || char === ">") && nextChar === "(") {
+        commandSubstitutionDepth += 1;
+        current += `${char}(`;
+        index += 2;
+        continue;
+      }
+
+      if (commandSubstitutionDepth > 0) {
+        if (char === "(") {
+          commandSubstitutionDepth += 1;
+        } else if (char === ")") {
+          commandSubstitutionDepth -= 1;
+        }
+
+        current += char;
+        index += 1;
+        continue;
+      }
+
+      current += char;
+      index += 1;
       continue;
     }
 
@@ -352,9 +458,23 @@ function tokenizeSegment(segment: string): string[] {
       continue;
     }
 
+    if (char === "`") {
+      backtickDepth += 1;
+      current += char;
+      index += 1;
+      continue;
+    }
+
     if (char === "$" && nextChar === "(") {
       commandSubstitutionDepth += 1;
       current += "$(";
+      index += 2;
+      continue;
+    }
+
+    if ((char === "<" || char === ">") && nextChar === "(") {
+      commandSubstitutionDepth += 1;
+      current += `${char}(`;
       index += 2;
       continue;
     }
@@ -459,6 +579,12 @@ function readCommandSubstitution(
       continue;
     }
 
+    if ((char === "<" || char === ">") && nextChar === "(") {
+      depth += 1;
+      index += 2;
+      continue;
+    }
+
     if (char === ")") {
       depth -= 1;
 
@@ -468,6 +594,74 @@ function readCommandSubstitution(
           substitution: value.slice(startIndex, index).trim(),
         };
       }
+    }
+
+    index += 1;
+  }
+
+  return null;
+}
+
+function readBacktickSubstitution(
+  value: string,
+  startIndex: number,
+): { readonly nextIndex: number; readonly substitution: string } | null {
+  let index = startIndex + 1;
+  let innerQuote: '"' | "'" | null = null;
+  let cmdSubDepth = 0;
+
+  while (index < value.length) {
+    const char = value.at(index) ?? "";
+    const nextChar = value.at(index + 1);
+
+    if (char === "\\" && nextChar !== undefined) {
+      index += 2;
+      continue;
+    }
+
+    if (innerQuote) {
+      if (char === innerQuote) {
+        innerQuote = null;
+      }
+
+      index += 1;
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      innerQuote = char;
+      index += 1;
+      continue;
+    }
+
+    if (char === "$" && nextChar === "(") {
+      cmdSubDepth += 1;
+      index += 2;
+      continue;
+    }
+
+    if ((char === "<" || char === ">") && nextChar === "(") {
+      cmdSubDepth += 1;
+      index += 2;
+      continue;
+    }
+
+    if (cmdSubDepth > 0) {
+      if (char === "(") {
+        cmdSubDepth += 1;
+      } else if (char === ")") {
+        cmdSubDepth -= 1;
+      }
+
+      index += 1;
+      continue;
+    }
+
+    if (char === "`") {
+      return {
+        nextIndex: index + 1,
+        substitution: value.slice(startIndex + 1, index).trim(),
+      };
     }
 
     index += 1;
@@ -497,7 +691,30 @@ function findCommandSubstitutions(value: string): string[] {
         continue;
       }
 
-      if (quote !== '"' || char !== "$" || nextChar !== "(") {
+      if (quote === '"') {
+        if (char === "`") {
+          const backtickResult = readBacktickSubstitution(value, index);
+
+          if (!backtickResult) {
+            index += 1;
+            continue;
+          }
+
+          substitutions.push(backtickResult.substitution);
+          index = backtickResult.nextIndex;
+          continue;
+        }
+
+        if (char !== "$" && char !== "<" && char !== ">") {
+          index += 1;
+          continue;
+        }
+
+        if (nextChar !== "(") {
+          index += 1;
+          continue;
+        }
+      } else {
         index += 1;
         continue;
       }
@@ -505,7 +722,21 @@ function findCommandSubstitutions(value: string): string[] {
       quote = char;
       index += 1;
       continue;
-    } else if (char !== "$" || nextChar !== "(") {
+    } else if (char === "`") {
+      const backtickResult = readBacktickSubstitution(value, index);
+
+      if (!backtickResult) {
+        index += 1;
+        continue;
+      }
+
+      substitutions.push(backtickResult.substitution);
+      index = backtickResult.nextIndex;
+      continue;
+    } else if (char !== "$" && char !== "<" && char !== ">") {
+      index += 1;
+      continue;
+    } else if (nextChar !== "(") {
       index += 1;
       continue;
     }

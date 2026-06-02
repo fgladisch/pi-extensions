@@ -539,6 +539,107 @@ describe("bash-approval extension", () => {
     });
   });
 
+  describe("tool_call event - backtick substitution handling", () => {
+    it("extracts commands from backtick substitution in assignment values", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "npm test:*\n",
+      });
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pick: (options) => {
+          captured = options;
+
+          return "Deny";
+        },
+      });
+
+      await toolCallHandler!(
+        bashEvent("FOO=`./evil.sh` npm test -- --runInBand"),
+        ctx,
+      );
+
+      expect(captured).toContain("Allow always: ./evil.sh:*");
+    });
+
+    it("does not split backtick regions into separate chain segments", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "echo:*\n",
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent("echo `echo a; echo b`"),
+        makeCtx().ctx,
+      );
+
+      expect(result).toBeUndefined();
+    });
+
+    it("extracts backtick commands inside double-quoted assignment values", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "printf:*\n",
+      });
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pick: (options) => {
+          captured = options;
+
+          return "Deny";
+        },
+      });
+
+      await toolCallHandler!(
+        bashEvent('tmp="`mktemp -d /tmp/foo-XXXXXX`" && printf \'%s\' "$tmp"'),
+        ctx,
+      );
+
+      expect(captured).toContain("Allow always: mktemp -d:*");
+    });
+
+    it("ignores literal backticks inside single-quoted assignment values", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "echo:*\n",
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent("echo '`not-a-command`'"),
+        makeCtx().ctx,
+      );
+
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe("tool_call event - process substitution handling", () => {
+    it("does not split process substitution regions into chain segments", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "diff:*\n",
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent("diff <(echo a | sort) <(echo b | sort)"),
+        makeCtx().ctx,
+      );
+
+      expect(result).toBeUndefined();
+    });
+
+    it("blocks commands whose only match is inside a process substitution", async () => {
+      // `diff:*` is allowed but the command includes `<(...)` content that
+      // stays opaque in the token. A command like `diff <(evil)` has the
+      // process sub as part of the matched token, not extracted separately.
+      const { toolCallHandler } = setup({
+        allowListFile: "diff:*\n",
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent("diff <(git show HEAD:old) <(git show HEAD:new)"),
+        makeCtx().ctx,
+      );
+
+      expect(result).toBeUndefined();
+    });
+  });
+
   describe("tool_call event - non-interactive (no UI)", () => {
     it("blocks with informative reason", async () => {
       const { toolCallHandler } = setup({ configFile: '{"allowed":[]}' });

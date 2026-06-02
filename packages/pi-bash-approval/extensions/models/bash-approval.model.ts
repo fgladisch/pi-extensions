@@ -13,6 +13,7 @@ export type GlobalSettings = {
 
 export type SplitState = {
   commandSubstitutionDepth: number;
+  backtickDepth: number;
   current: string;
   parts: string[];
   quote: '"' | "'" | null;
