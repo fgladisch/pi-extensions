@@ -39,15 +39,7 @@ This repo publishes through GitHub Actions on `main` via `.github/workflows/rele
 4. Merge release PR.
 5. CI publishes to npm through Trusted Publisher.
 
-### Required repository and npm settings
-
-- GitHub Actions workflow permissions: **Read and write permissions**
-- Enable: **Allow GitHub Actions to create and approve pull requests**
-- Release workflow permissions include `id-token: write`
-- Each npm package is configured with Trusted Publisher for this GitHub repository and `.github/workflows/release.yml`
-
 ### Notes
 
 - Keep package versions source-controlled via changesets; do not manually bump versions for normal releases.
-- Do not add an `NPM_TOKEN` secret for publishing; Trusted Publisher handles npm authentication.
 - If release job fails with `ENOENT .../packages/<pkg>/CHANGELOG.md`, add `CHANGELOG.md` to that package.
