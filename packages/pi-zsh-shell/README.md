@@ -35,8 +35,8 @@ Prefer functions over aliases. Functions work reliably in this non-interactive `
 
 By default the extension uses:
 
-1. `PI_ZSH_SHELL`, if set
-2. `$SHELL`, when its basename is `zsh`
+1. `PI_ZSH_SHELL`, if set to an absolute path
+2. `$SHELL`, when it is an absolute path and its basename is `zsh`
 3. `/bin/zsh`
 
 Example:
