@@ -1,4 +1,11 @@
-import { describe, expect, it, jest } from "@jest/globals";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  jest,
+} from "@jest/globals";
 import * as os from "node:os";
 import * as path from "node:path";
 
@@ -55,6 +62,28 @@ function setup() {
 }
 
 describe("pi-zsh-shell", () => {
+  const originalShell = process.env.SHELL;
+  const originalPiZshShell = process.env.PI_ZSH_SHELL;
+
+  beforeEach(() => {
+    delete process.env.PI_ZSH_SHELL;
+    delete process.env.SHELL;
+  });
+
+  afterEach(() => {
+    if (originalShell === undefined) {
+      delete process.env.SHELL;
+    } else {
+      process.env.SHELL = originalShell;
+    }
+
+    if (originalPiZshShell === undefined) {
+      delete process.env.PI_ZSH_SHELL;
+    } else {
+      process.env.PI_ZSH_SHELL = originalPiZshShell;
+    }
+  });
+
   it("runs user bash commands through zsh and sources Pi zsh functions first", () => {
     const { handler } = setup();
     const operations = handler().operations;
