@@ -1,6 +1,6 @@
 {
   "name": "@fgladisch/pi-zsh-shell",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Run Pi user bash commands through zsh with Pi-specific functions",
   "keywords": [
     "pi-package"
