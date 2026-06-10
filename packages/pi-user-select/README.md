@@ -42,8 +42,9 @@ Example:
 
 ## Behavior
 
-- **Interactive UI**: shows question, numbered options, a blank line, descriptions
-  indented by four spaces, and optional `(Type custom answer)` entry.
+- **Interactive UI**: shows question, numbered options, a blank line before and
+  after descriptions, descriptions indented by four spaces, and optional
+  `(Type custom answer)` entry.
 - **Non-interactive** (`pi -p`, JSON mode): throws so LLM sees error result
   and stops looping on tool that has no human to answer it.
 - **Cancellation** (Esc / null / whitespace-only custom answer): returns

@@ -104,7 +104,7 @@ function formatOptionLabel(option: SelectOption, index: number): string {
     (line) => `${DESCRIPTION_INDENT}${line}`,
   );
 
-  return [head, "", ...descriptionLines].join("\n");
+  return [head, "", ...descriptionLines, ""].join("\n");
 }
 
 export function buildDisplayOptions(

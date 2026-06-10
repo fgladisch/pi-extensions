@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Render option descriptions after a blank line with four-space indentation instead of inline after the label.
+- Render option descriptions after a blank line with four-space indentation and a trailing blank line before the next option.
 
 ## 0.1.1
 

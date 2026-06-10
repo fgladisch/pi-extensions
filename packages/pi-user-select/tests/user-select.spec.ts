@@ -200,7 +200,7 @@ describe("user-select extension", () => {
       expect(input).not.toHaveBeenCalled();
       expect(captured).toEqual([
         "1. npm",
-        "2. pnpm\n\n    Faster, content-addressable",
+        "2. pnpm\n\n    Faster, content-addressable\n",
         "3. yarn",
       ]);
       expect(result.content[0]).toEqual({
@@ -249,7 +249,9 @@ describe("user-select extension", () => {
       expect(wrappedLines.at(0)).toBe("1. policy graph");
       expect(wrappedLines.at(1)).toBe("");
 
-      for (const line of wrappedLines.slice(2)) {
+      expect(wrappedLines.at(-1)).toBe("");
+
+      for (const line of wrappedLines.slice(2, -1)) {
         expect(line.startsWith("    ")).toBe(true);
         expect(line.startsWith("     ")).toBe(false);
       }
