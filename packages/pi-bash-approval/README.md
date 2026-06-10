@@ -5,6 +5,8 @@ intercepted; commands matching configured pattern run silently, anything else
 prompts user. In non-interactive contexts (`pi -p`, no UI), unknown commands
 are blocked with reason pointing at config file.
 
+![Bash approval prompt example](./example.png)
+
 ## Install
 
 ```bash
