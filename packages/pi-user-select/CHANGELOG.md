@@ -1,5 +1,11 @@
 # @fgladisch/pi-user-select
 
+## 0.1.3
+
+### Patch Changes
+
+- Render a trailing blank line after option descriptions in user select prompts.
+
 ## Unreleased
 
 - Render option descriptions after a blank line with four-space indentation and a trailing blank line before the next option.
