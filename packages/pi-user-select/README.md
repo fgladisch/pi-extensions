@@ -61,3 +61,26 @@ Tool result text:
 
 `details` includes structured fields (`question`, `options`, `answer`,
 `wasCustom`, `cancelled`) for renderers and downstream skills.
+
+## Inter-extension events
+
+The extension emits lifecycle events on `pi.events` so another extension can
+mirror and answer prompts, while the local TUI remains active. The first valid
+answer wins; late responses return `{ accepted: false, reason:
+"already_resolved" }`. Listener failures are ignored so the local UI remains the
+fallback.
+
+| Event                                 | When it fires                                      |
+| ------------------------------------- | -------------------------------------------------- |
+| `pi-user-select:request`              | Before opening the local selection prompt.         |
+| `pi-user-select:custom-input-request` | Before opening the local custom-answer input.      |
+| `pi-user-select:resolved`             | After local or remote selection/cancellation wins. |
+| `pi-user-select:error`                | When execution fails unexpectedly.                 |
+| `pi-user-select:closed`               | When a request can no longer be answered.          |
+
+Request events include a `respond(response)` callback. `pi-user-select:request`
+accepts remote `{ source: "remote", kind: "select", optionIndex }`,
+`{ source: "remote", kind: "custom", value }` when `allowCustom` is enabled, or
+`{ source: "remote", kind: "cancel" }`. `pi-user-select:custom-input-request`
+accepts `{ source: "remote", kind: "submit", value }` or
+`{ source: "remote", kind: "cancel" }`.

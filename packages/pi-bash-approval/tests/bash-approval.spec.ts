@@ -30,7 +30,11 @@ jest.mock("node:fs", () => ({
 
 // ---------- helper types ----------
 
-type ToolCallEventLike = { toolName: string; input: { command?: unknown } };
+type ToolCallEventLike = {
+  toolName: string;
+  toolCallId?: string;
+  input: { command?: unknown };
+};
 
 type ToolCallReturn = undefined | { block: true; reason: string };
 
@@ -48,16 +52,29 @@ type FsMock = {
   mkdirSync: jest.Mock<(...args: unknown[]) => unknown>;
 };
 
+type EmittedEvent = {
+  name: string;
+  data: Record<string, unknown>;
+};
+
 type Recorded = {
   toolCallHandler: ToolCallHandler | null;
   commands: Map<string, CommandHandler>;
   fs: FsMock;
+  emitted: EmittedEvent[];
+  onEmit?: (name: string, data: Record<string, unknown>) => void;
 };
 
 // ---------- helpers ----------
 
 function makeFakePi(rec: Recorded) {
   return {
+    events: {
+      emit: jest.fn((name: string, data: Record<string, unknown>) => {
+        rec.emitted.push({ name, data });
+        rec.onEmit?.(name, data);
+      }),
+    },
     on: jest.fn((eventName: string, handler: ToolCallHandler) => {
       if (eventName === "tool_call") {
         rec.toolCallHandler = handler;
@@ -72,10 +89,16 @@ function makeFakePi(rec: Recorded) {
   };
 }
 
-type SelectFn = (msg: string, options: string[]) => Promise<string | null>;
+type SelectResult = string | null | undefined;
+
+type SelectFn = (msg: string, options: string[]) => Promise<SelectResult>;
 
 function makeCtx(
-  opts: { hasUI?: boolean; pick?: (options: string[]) => string | null } = {},
+  opts: {
+    hasUI?: boolean;
+    cwd?: string;
+    pick?: (options: string[]) => SelectResult | Promise<SelectResult>;
+  } = {},
 ) {
   const notify = jest.fn();
   const select = jest
@@ -83,7 +106,11 @@ function makeCtx(
     .mockImplementation((_msg, options) =>
       Promise.resolve(opts.pick ? opts.pick(options) : null),
     );
-  const ctx = { hasUI: opts.hasUI ?? true, ui: { notify, select } };
+  const ctx = {
+    cwd: opts.cwd ?? "/repo",
+    hasUI: opts.hasUI ?? true,
+    ui: { notify, select },
+  };
 
   return { ctx, notify, select };
 }
@@ -137,7 +164,7 @@ function getLegacyConfigFiles(configFile: string | undefined): {
   }
 }
 
-function setup(opts: SetupOpts = {}): Recorded {
+function setup(opts: SetupOpts = {}, onEmit?: Recorded["onEmit"]): Recorded {
   jest.resetModules();
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -184,7 +211,13 @@ function setup(opts: SetupOpts = {}): Recorded {
     });
   }
 
-  const recorded: Recorded = { toolCallHandler: null, commands: new Map(), fs };
+  const recorded: Recorded = {
+    toolCallHandler: null,
+    commands: new Map(),
+    fs,
+    emitted: [],
+    onEmit,
+  };
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const mod = require("../extensions") as { default: (pi: unknown) => void };
   mod.default(makeFakePi(recorded));
@@ -200,7 +233,7 @@ function enoent(): NodeJS.ErrnoException {
 }
 
 function bashEvent(command: unknown): ToolCallEventLike {
-  return { toolName: "bash", input: { command } };
+  return { toolName: "bash", toolCallId: "bash-call-1", input: { command } };
 }
 
 // ---------- tests ----------
@@ -1271,6 +1304,254 @@ git status --short`,
       );
 
       expect(result).toBeUndefined();
+    });
+  });
+
+  describe("remote interaction events", () => {
+    it("emits config loaded and reloaded events", async () => {
+      const { commands, emitted } = setup({ configFile: '{"allowed":["ls"]}' });
+      const { ctx } = makeCtx();
+
+      await commands.get("bash-approval-reload")!("", ctx);
+
+      expect(emitted.at(0)).toMatchObject({
+        name: "pi-bash-approval:config_loaded",
+        data: {
+          plugin: "pi-bash-approval",
+          allowedCount: 1,
+          splitChains: true,
+        },
+      });
+      expect(emitted.at(-1)).toMatchObject({
+        name: "pi-bash-approval:reloaded",
+        data: {
+          plugin: "pi-bash-approval",
+          allowedCount: 1,
+          splitChains: true,
+          source: "command",
+        },
+      });
+    });
+
+    it("emits evaluated and allowed events for allow-listed commands", async () => {
+      const { toolCallHandler, emitted } = setup({
+        configFile: '{"allowed":["ls"]}',
+      });
+
+      const result = await toolCallHandler!(bashEvent("ls"), makeCtx().ctx);
+
+      expect(result).toBeUndefined();
+      expect(emitted.map(({ name }) => name)).toEqual([
+        "pi-bash-approval:config_loaded",
+        "pi-bash-approval:evaluated",
+        "pi-bash-approval:allowed",
+      ]);
+      expect(emitted.at(1)?.data).toMatchObject({
+        toolCallId: "bash-call-1",
+        command: "ls",
+        trimmedCommand: "ls",
+        allMatch: true,
+        splitChains: true,
+      });
+      expect(emitted.at(2)?.data).toMatchObject({
+        mode: "allowlist",
+        command: "ls",
+      });
+    });
+
+    it("emits blocked events for non-interactive unknown commands", async () => {
+      const { toolCallHandler, emitted } = setup({
+        configFile: '{"allowed":[]}',
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent("git status"),
+        makeCtx({ hasUI: false }).ctx,
+      );
+
+      expect(result).toMatchObject({ block: true });
+      expect(emitted.map(({ name }) => name)).toEqual([
+        "pi-bash-approval:config_loaded",
+        "pi-bash-approval:evaluated",
+        "pi-bash-approval:blocked",
+      ]);
+      expect(emitted.at(2)?.data).toMatchObject({
+        toolCallId: "bash-call-1",
+        command: "git status",
+        reason: expect.stringContaining("not on allow-list"),
+      });
+    });
+
+    it("allows a remote allow-once response to resolve before local UI", async () => {
+      let remoteResult: unknown;
+      const recorded = setup({ configFile: '{"allowed":[]}' }, (name, data) => {
+        if (name === "pi-bash-approval:request") {
+          const respond = data.respond as (response: unknown) => unknown;
+          remoteResult = respond({ source: "remote", action: "allow_once" });
+        }
+      });
+      const { ctx, select } = makeCtx({
+        pick: () => new Promise<SelectResult>(() => undefined),
+      });
+
+      const result = await recorded.toolCallHandler!(
+        bashEvent("git status"),
+        ctx,
+      );
+
+      expect(result).toBeUndefined();
+      expect(remoteResult).toEqual({ accepted: true });
+      expect(select).not.toHaveBeenCalled();
+      expect(recorded.emitted.map(({ name }) => name)).toEqual([
+        "pi-bash-approval:config_loaded",
+        "pi-bash-approval:evaluated",
+        "pi-bash-approval:request",
+        "pi-bash-approval:resolved",
+        "pi-bash-approval:allowed",
+        "pi-bash-approval:closed",
+      ]);
+      expect(recorded.emitted.at(2)?.data).toMatchObject({
+        plugin: "pi-bash-approval",
+        kind: "bash_approval",
+        toolCallId: "bash-call-1",
+        cwd: "/repo",
+        command: "git status",
+        failingSegment: "git status",
+      });
+      expect(recorded.emitted.at(3)?.data).toMatchObject({
+        selectedBy: "remote",
+        decision: { action: "allow_once" },
+      });
+      expect(recorded.emitted.at(4)?.data).toMatchObject({
+        mode: "allow_once",
+        selectedBy: "remote",
+      });
+    });
+
+    it("rejects late remote responses after local deny blocks", async () => {
+      const responder: { current: ((response: unknown) => unknown) | null } = {
+        current: null,
+      };
+      const recorded = setup({ configFile: '{"allowed":[]}' }, (name, data) => {
+        if (name === "pi-bash-approval:request") {
+          responder.current = data.respond as (response: unknown) => unknown;
+        }
+      });
+      const { ctx } = makeCtx({ pick: () => "Deny" });
+
+      const result = await recorded.toolCallHandler!(
+        bashEvent("git status"),
+        ctx,
+      );
+
+      expect(result).toEqual({ block: true, reason: "Blocked by user" });
+      const lateRespond = responder.current;
+      if (!lateRespond) {
+        throw new Error("request responder was not captured");
+      }
+      expect(lateRespond({ source: "remote", action: "allow_once" })).toEqual({
+        accepted: false,
+        reason: "already_resolved",
+      });
+      expect(recorded.emitted.at(3)?.data).toMatchObject({
+        selectedBy: "local",
+        decision: { action: "deny", reason: "Blocked by user" },
+      });
+      expect(recorded.emitted.at(4)).toMatchObject({
+        name: "pi-bash-approval:blocked",
+        data: { selectedBy: "local", reason: "Blocked by user" },
+      });
+    });
+
+    it("rejects malformed remote responses as invalid_response", async () => {
+      let malformedResult: unknown;
+      const recorded = setup({ configFile: '{"allowed":[]}' }, (name, data) => {
+        if (name === "pi-bash-approval:request") {
+          const respond = data.respond as (response: unknown) => unknown;
+          malformedResult = respond(null);
+        }
+      });
+      const { ctx } = makeCtx({ pick: () => "Allow once" });
+
+      const result = await recorded.toolCallHandler!(
+        bashEvent("git status"),
+        ctx,
+      );
+
+      expect(result).toBeUndefined();
+      expect(malformedResult).toEqual({
+        accepted: false,
+        reason: "invalid_response",
+      });
+    });
+
+    it("falls back to local UI when an event listener throws", async () => {
+      const recorded = setup({ configFile: '{"allowed":[]}' }, (name) => {
+        if (name === "pi-bash-approval:request") {
+          throw new Error("listener failed");
+        }
+      });
+      const { ctx } = makeCtx({ pick: () => "Allow once" });
+
+      const result = await recorded.toolCallHandler!(
+        bashEvent("git status"),
+        ctx,
+      );
+
+      expect(result).toBeUndefined();
+      expect(recorded.emitted.map(({ name }) => name)).toEqual([
+        "pi-bash-approval:config_loaded",
+        "pi-bash-approval:evaluated",
+        "pi-bash-approval:request",
+        "pi-bash-approval:resolved",
+        "pi-bash-approval:allowed",
+        "pi-bash-approval:closed",
+      ]);
+    });
+
+    it("persists and emits rule_persisted for remote allow-always responses", async () => {
+      const recorded = setup({ configFile: '{"allowed":[]}' }, (name, data) => {
+        if (name === "pi-bash-approval:request") {
+          const options = data.options as Array<{
+            id: string;
+            action: string;
+            rule?: string;
+          }>;
+          const allowAlways = options.find(
+            (option) => option.action === "allow_always" && option.rule,
+          );
+          const respond = data.respond as (response: unknown) => unknown;
+          respond({
+            source: "remote",
+            action: "allow_always",
+            optionId: allowAlways?.id,
+            rule: allowAlways?.rule,
+          });
+        }
+      });
+      const { ctx } = makeCtx({
+        pick: () => new Promise<SelectResult>(() => undefined),
+      });
+
+      const result = await recorded.toolCallHandler!(
+        bashEvent("git status -sb"),
+        ctx,
+      );
+
+      expect(result).toBeUndefined();
+      expect(recorded.fs.appendFileSync).toHaveBeenCalledWith(
+        ALLOW_LIST_PATH,
+        expect.stringContaining("git status -sb"),
+        "utf8",
+      );
+      expect(recorded.emitted.map(({ name }) => name)).toContain(
+        "pi-bash-approval:rule_persisted",
+      );
+      expect(
+        recorded.emitted.find(
+          ({ name }) => name === "pi-bash-approval:allowed",
+        ),
+      ).toMatchObject({ data: { mode: "allow_always", selectedBy: "remote" } });
     });
   });
 
