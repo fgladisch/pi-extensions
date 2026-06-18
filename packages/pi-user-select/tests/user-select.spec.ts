@@ -59,14 +59,20 @@ type ToolDefinition = {
   }>;
 };
 
-type Recorded = {
-  tools: Map<string, ToolDefinition>;
+type EmittedEvent = {
+  name: string;
+  data: Record<string, unknown>;
 };
 
-type SelectFn = (
-  message: string,
-  options: string[],
-) => Promise<string | null | undefined>;
+type Recorded = {
+  tools: Map<string, ToolDefinition>;
+  emitted: EmittedEvent[];
+  onEmit?: (name: string, data: Record<string, unknown>) => void;
+};
+
+type SelectResult = string | null | undefined;
+
+type SelectFn = (message: string, options: string[]) => Promise<SelectResult>;
 
 type InputFn = (
   message: string,
@@ -77,6 +83,12 @@ type InputFn = (
 
 function makeFakePi(rec: Recorded) {
   return {
+    events: {
+      emit: jest.fn((name: string, data: Record<string, unknown>) => {
+        rec.emitted.push({ name, data });
+        rec.onEmit?.(name, data);
+      }),
+    },
     on: jest.fn(),
     registerCommand: jest.fn(),
     registerTool: jest.fn((definition: ToolDefinition) => {
@@ -88,8 +100,8 @@ function makeFakePi(rec: Recorded) {
 function makeCtx(
   opts: {
     hasUI?: boolean;
-    pickOption?: (options: string[]) => string | null | undefined;
-    typedAnswer?: string | null | undefined;
+    pickOption?: (options: string[]) => SelectResult | Promise<SelectResult>;
+    typedAnswer?: SelectResult | Promise<SelectResult>;
   } = {},
 ) {
   const notify = jest.fn();
@@ -109,10 +121,10 @@ function makeCtx(
   return { ctx, notify, select, input };
 }
 
-function setup(): Recorded {
+function setup(onEmit?: Recorded["onEmit"]): Recorded {
   jest.resetModules();
 
-  const recorded: Recorded = { tools: new Map() };
+  const recorded: Recorded = { tools: new Map(), emitted: [], onEmit };
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const mod = require("../extensions") as { default: (pi: unknown) => void };
   mod.default(makeFakePi(recorded));
@@ -445,6 +457,255 @@ describe("user-select extension", () => {
           ctx,
         ),
       ).rejects.toThrow(/unknown option/);
+    });
+  });
+
+  describe("remote interaction events", () => {
+    it("allows a remote select response to resolve before the local UI", async () => {
+      let remoteResult: unknown;
+      const recorded = setup((name, data) => {
+        if (name === "pi-user-select:request") {
+          const respond = data.respond as (response: unknown) => unknown;
+          remoteResult = respond({
+            source: "remote",
+            kind: "select",
+            optionIndex: 1,
+          });
+        }
+      });
+      const tool = recorded.tools.get("user_select")!;
+      const { ctx, select } = makeCtx({
+        pickOption: () => new Promise<SelectResult>(() => undefined),
+      });
+
+      const result = await tool.execute(
+        "tool-call-1",
+        { question: "Pick one", options: SAMPLE_OPTIONS, allowCustom: true },
+        null,
+        null,
+        ctx,
+      );
+
+      expect(remoteResult).toEqual({ accepted: true });
+      expect(select).not.toHaveBeenCalled();
+      expect(result.details).toMatchObject({
+        answer: "pnpm",
+        cancelled: false,
+      });
+      expect(recorded.emitted.map(({ name }) => name)).toEqual([
+        "pi-user-select:request",
+        "pi-user-select:resolved",
+        "pi-user-select:closed",
+      ]);
+      expect(recorded.emitted.at(0)?.data).toMatchObject({
+        plugin: "pi-user-select",
+        kind: "select",
+        toolCallId: "tool-call-1",
+        question: "Pick one",
+        allowCustom: true,
+      });
+      expect(recorded.emitted.at(1)?.data).toMatchObject({
+        selectedBy: "remote",
+        result: { kind: "select", optionIndex: 1, label: "pnpm" },
+      });
+      expect(recorded.emitted.at(2)?.data).toMatchObject({
+        reason: "resolved",
+      });
+    });
+
+    it("rejects late remote responses after the local UI resolves", async () => {
+      const responder: { current: ((response: unknown) => unknown) | null } = {
+        current: null,
+      };
+      const recorded = setup((name, data) => {
+        if (name === "pi-user-select:request") {
+          responder.current = data.respond as (response: unknown) => unknown;
+        }
+      });
+      const tool = recorded.tools.get("user_select")!;
+      const { ctx } = makeCtx({ pickOption: (options) => options.at(0) });
+
+      const result = await tool.execute(
+        "tool-call-2",
+        { question: "Pick one", options: SAMPLE_OPTIONS },
+        null,
+        null,
+        ctx,
+      );
+
+      expect(result.details).toMatchObject({ answer: "npm", cancelled: false });
+      const lateRespond = responder.current;
+      if (!lateRespond) {
+        throw new Error("request responder was not captured");
+      }
+      expect(
+        lateRespond({ source: "remote", kind: "select", optionIndex: 1 }),
+      ).toEqual({
+        accepted: false,
+        reason: "already_resolved",
+      });
+      expect(recorded.emitted.at(1)?.data).toMatchObject({
+        selectedBy: "local",
+        result: { kind: "select", optionIndex: 0, label: "npm" },
+      });
+    });
+
+    it("rejects malformed remote responses as invalid_response", async () => {
+      let malformedResult: unknown;
+      const recorded = setup((name, data) => {
+        if (name === "pi-user-select:request") {
+          const respond = data.respond as (response: unknown) => unknown;
+          malformedResult = respond(null);
+        }
+      });
+      const tool = recorded.tools.get("user_select")!;
+      const { ctx } = makeCtx({ pickOption: (options) => options.at(0) });
+
+      const result = await tool.execute(
+        "tool-call-invalid",
+        { question: "Pick one", options: SAMPLE_OPTIONS },
+        null,
+        null,
+        ctx,
+      );
+
+      expect(malformedResult).toEqual({
+        accepted: false,
+        reason: "invalid_response",
+      });
+      expect(result.details).toMatchObject({ answer: "npm", cancelled: false });
+    });
+
+    it("keeps custom input response atomic against later top-level responses", async () => {
+      let topLevelRespond: ((response: unknown) => unknown) | null = null;
+      let customResult: unknown;
+      let lateTopLevelResult: unknown;
+      const recorded = setup((name, data) => {
+        if (name === "pi-user-select:request") {
+          topLevelRespond = data.respond as (response: unknown) => unknown;
+        }
+
+        if (name === "pi-user-select:custom-input-request") {
+          const customRespond = data.respond as (response: unknown) => unknown;
+          customResult = customRespond({
+            source: "remote",
+            kind: "submit",
+            value: "bun",
+          });
+          lateTopLevelResult = topLevelRespond?.({
+            source: "remote",
+            kind: "select",
+            optionIndex: 0,
+          });
+        }
+      });
+      const tool = recorded.tools.get("user_select")!;
+      const { ctx, input } = makeCtx({
+        pickOption: (options) =>
+          options.find((option) => option === "(Type custom answer)") ?? null,
+        typedAnswer: new Promise<SelectResult>(() => undefined),
+      });
+
+      const result = await tool.execute(
+        "tool-call-custom-race",
+        { question: "Pick one", options: SAMPLE_OPTIONS, allowCustom: true },
+        null,
+        null,
+        ctx,
+      );
+
+      expect(customResult).toEqual({ accepted: true });
+      expect(lateTopLevelResult).toEqual({
+        accepted: false,
+        reason: "already_resolved",
+      });
+      expect(input).not.toHaveBeenCalled();
+      expect(result.details).toMatchObject({ answer: "bun", wasCustom: true });
+    });
+
+    it("falls back to local UI when an event listener throws", async () => {
+      const recorded = setup((name) => {
+        if (name === "pi-user-select:request") {
+          throw new Error("listener failed");
+        }
+      });
+      const tool = recorded.tools.get("user_select")!;
+      const { ctx } = makeCtx({ pickOption: (options) => options.at(2) });
+
+      const result = await tool.execute(
+        "tool-call-listener-throw",
+        { question: "Pick one", options: SAMPLE_OPTIONS },
+        null,
+        null,
+        ctx,
+      );
+
+      expect(result.details).toMatchObject({
+        answer: "yarn",
+        cancelled: false,
+      });
+    });
+
+    it("emits a custom input request when the local custom-answer flow opens", async () => {
+      const recorded = setup();
+      const tool = recorded.tools.get("user_select")!;
+      const { ctx } = makeCtx({
+        pickOption: (options) =>
+          options.find((option) => option === "(Type custom answer)") ?? null,
+        typedAnswer: "  bun  ",
+      });
+
+      const result = await tool.execute(
+        "tool-call-3",
+        { question: "Pick one", options: SAMPLE_OPTIONS, allowCustom: true },
+        null,
+        null,
+        ctx,
+      );
+
+      expect(result.details).toMatchObject({ answer: "bun", wasCustom: true });
+      expect(recorded.emitted.map(({ name }) => name)).toEqual([
+        "pi-user-select:request",
+        "pi-user-select:custom-input-request",
+        "pi-user-select:resolved",
+        "pi-user-select:closed",
+      ]);
+      expect(recorded.emitted.at(1)?.data).toMatchObject({
+        plugin: "pi-user-select",
+        kind: "custom_input",
+        question: "Pick one",
+      });
+      expect(recorded.emitted.at(2)?.data).toMatchObject({
+        selectedBy: "local",
+        result: { kind: "custom", value: "bun" },
+      });
+    });
+
+    it("emits error and closed events when an unexpected failure occurs", async () => {
+      const recorded = setup();
+      const tool = recorded.tools.get("user_select")!;
+      const { ctx } = makeCtx({ pickOption: () => "totally made up" });
+
+      await expect(
+        tool.execute(
+          "tool-call-4",
+          { question: "Pick one", options: SAMPLE_OPTIONS },
+          null,
+          null,
+          ctx,
+        ),
+      ).rejects.toThrow(/unknown option/);
+
+      expect(recorded.emitted.map(({ name }) => name)).toEqual([
+        "pi-user-select:request",
+        "pi-user-select:error",
+        "pi-user-select:closed",
+      ]);
+      expect(recorded.emitted.at(1)?.data).toMatchObject({
+        plugin: "pi-user-select",
+        error: expect.stringMatching(/unknown option/),
+      });
+      expect(recorded.emitted.at(2)?.data).toMatchObject({ reason: "error" });
     });
   });
 });
