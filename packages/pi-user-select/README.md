@@ -66,9 +66,9 @@ Tool result text:
 
 The extension emits lifecycle events on `pi.events` so another extension can
 mirror and answer prompts, while the local TUI remains active. The first valid
-answer wins; late responses return `{ accepted: false, reason:
-"already_resolved" }`. Listener failures are ignored so the local UI remains the
-fallback.
+answer wins; when a remote answer wins, the open local dialog is dismissed. Late
+responses return `{ accepted: false, reason: "already_resolved" }`. Listener
+failures are ignored so the local UI remains the fallback.
 
 | Event                                 | When it fires                                      |
 | ------------------------------------- | -------------------------------------------------- |

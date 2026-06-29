@@ -163,6 +163,7 @@ export default function (pi: ExtensionAPI) {
       createdAt,
     } as const;
     const controller = createController<BashDecision>();
+    const localPromptAbort = new AbortController();
     let closedReason: BashApprovalClosedEvent["reason"] = "resolved";
 
     const requestEvent: BashApprovalRequestEvent = {
@@ -172,7 +173,7 @@ export default function (pi: ExtensionAPI) {
       failingSegment,
       options,
       respond: (response) =>
-        respondToBashApproval(response, options, controller),
+        respondToBashApproval(response, options, controller, localPromptAbort),
     };
 
     try {
@@ -182,7 +183,10 @@ export default function (pi: ExtensionAPI) {
         void resolveLocalDecision(
           prompt.options,
           prompt.rulesByOption,
-          (message, selectOptions) => ctx.ui.select(message, selectOptions),
+          (message, selectOptions) =>
+            ctx.ui.select(message, selectOptions, {
+              signal: localPromptAbort.signal,
+            }),
           command,
           failingSegment,
           controller.isSettled,
@@ -383,6 +387,7 @@ function respondToBashApproval(
   response: BashApprovalResponse,
   options: readonly BashApprovalOption[],
   controller: Controller<BashDecision>,
+  localPromptAbort: AbortController,
 ): RespondResult {
   if (controller.isSettled()) {
     return { accepted: false, reason: "already_resolved" };
@@ -393,7 +398,11 @@ function respondToBashApproval(
     return { accepted: false, reason: "invalid_response" };
   }
 
-  controller.accept(decision);
+  if (!controller.accept(decision)) {
+    return { accepted: false, reason: "already_resolved" };
+  }
+
+  localPromptAbort.abort();
   return { accepted: true };
 }
 
@@ -414,6 +423,10 @@ function remoteBashDecision(
       selectedBy: "remote",
       decision: { action: "deny", reason: response.reason ?? BLOCKED_BY_USER },
     };
+  }
+
+  if (response.action !== "allow_always") {
+    return null;
   }
 
   const option = options.find(

@@ -97,6 +97,7 @@ export default function (pi: ExtensionAPI) {
       } as const;
       const displayOptions = buildDisplayOptions(options, allowCustom);
       const controller = createController<Decision>();
+      const localPromptAbort = new AbortController();
       let closedReason: UserSelectClosedEvent["reason"] = "resolved";
 
       const requestEvent: UserSelectRequestEvent = {
@@ -110,7 +111,13 @@ export default function (pi: ExtensionAPI) {
         })),
         allowCustom,
         respond: (response) =>
-          respondToUserSelect(response, params, controller, allowCustom),
+          respondToUserSelect(
+            response,
+            params,
+            controller,
+            allowCustom,
+            localPromptAbort,
+          ),
       };
 
       try {
@@ -124,6 +131,7 @@ export default function (pi: ExtensionAPI) {
             requestBase,
             displayOptions,
             controller,
+            localPromptAbort,
           ).then(
             (decision) => {
               if (decision) {
@@ -202,6 +210,7 @@ function respondToUserSelect(
   params: UserSelectInput,
   controller: Controller<Decision>,
   allowCustom: boolean,
+  localPromptAbort: AbortController,
 ): RespondResult {
   if (controller.isSettled()) {
     return { accepted: false, reason: "already_resolved" };
@@ -212,7 +221,11 @@ function respondToUserSelect(
     return { accepted: false, reason: "invalid_response" };
   }
 
-  controller.accept(decision);
+  if (!controller.accept(decision)) {
+    return { accepted: false, reason: "already_resolved" };
+  }
+
+  localPromptAbort.abort();
   return { accepted: true };
 }
 
@@ -234,7 +247,7 @@ function remoteUserSelectDecision(
   }
 
   if (response.kind === "custom") {
-    if (!allowCustom) {
+    if (!allowCustom || typeof response.value !== "string") {
       return null;
     }
 
@@ -250,8 +263,20 @@ function remoteUserSelectDecision(
     };
   }
 
+  if (response.kind !== "select") {
+    return null;
+  }
+
+  if (
+    !Number.isInteger(response.optionIndex) ||
+    response.optionIndex < 0 ||
+    response.optionIndex >= params.options.length
+  ) {
+    return null;
+  }
+
   const option = params.options.at(response.optionIndex);
-  if (!Number.isInteger(response.optionIndex) || !option) {
+  if (!option) {
     return null;
   }
 
@@ -276,9 +301,12 @@ async function resolveLocalSelection(
   >,
   displayOptions: string[],
   controller: Controller<Decision>,
+  localPromptAbort: AbortController,
 ): Promise<Decision | null> {
   const { allowCustom = false } = params;
-  const choice = await ui.select(params.question, displayOptions);
+  const choice = await ui.select(params.question, displayOptions, {
+    signal: localPromptAbort.signal,
+  });
 
   if (controller.isSettled()) {
     return null;
@@ -294,7 +322,14 @@ async function resolveLocalSelection(
 
   const customAnswerLabel = getCustomAnswerLabel();
   if (allowCustom && choice === customAnswerLabel) {
-    return resolveCustomAnswer(pi, params, ui, requestBase, controller);
+    return resolveCustomAnswer(
+      pi,
+      params,
+      ui,
+      requestBase,
+      controller,
+      localPromptAbort,
+    );
   }
 
   const { index, option } = resolveSelectedOption(
@@ -320,12 +355,14 @@ async function resolveCustomAnswer(
     "question" | "options" | "allowCustom" | "respond"
   >,
   controller: Controller<Decision>,
+  localPromptAbort: AbortController,
 ): Promise<Decision | null> {
   const requestEvent: CustomInputRequestEvent = {
     ...requestBase,
     kind: "custom_input",
     question: params.question,
-    respond: (response) => respondToCustomInput(response, params, controller),
+    respond: (response) =>
+      respondToCustomInput(response, params, controller, localPromptAbort),
   };
 
   emitSafe(pi, "pi-user-select:custom-input-request", requestEvent);
@@ -334,7 +371,7 @@ async function resolveCustomAnswer(
     return controller.promise;
   }
 
-  void ui.input(params.question, "").then(
+  void ui.input(params.question, "", { signal: localPromptAbort.signal }).then(
     (typed) => {
       if (controller.isSettled()) {
         return;
@@ -371,6 +408,7 @@ function respondToCustomInput(
   response: CustomInputResponse,
   params: UserSelectInput,
   controller: Controller<Decision>,
+  localPromptAbort: AbortController,
 ): RespondResult {
   if (controller.isSettled()) {
     return { accepted: false, reason: "already_resolved" };
@@ -381,12 +419,22 @@ function respondToCustomInput(
   }
 
   if (response.kind === "cancel") {
-    controller.accept({
-      selectedBy: "remote",
-      result: { kind: "cancel" },
-      executeResult: cancelledResult(params),
-    });
+    if (
+      !controller.accept({
+        selectedBy: "remote",
+        result: { kind: "cancel" },
+        executeResult: cancelledResult(params),
+      })
+    ) {
+      return { accepted: false, reason: "already_resolved" };
+    }
+
+    localPromptAbort.abort();
     return { accepted: true };
+  }
+
+  if (response.kind !== "submit" || typeof response.value !== "string") {
+    return { accepted: false, reason: "invalid_response" };
   }
 
   const executeResult = customAnswerResult(params, response.value);
@@ -394,11 +442,17 @@ function respondToCustomInput(
     return { accepted: false, reason: "invalid_response" };
   }
 
-  controller.accept({
-    selectedBy: "remote",
-    result: { kind: "custom", value: executeResult.details?.answer ?? "" },
-    executeResult,
-  });
+  if (
+    !controller.accept({
+      selectedBy: "remote",
+      result: { kind: "custom", value: executeResult.details?.answer ?? "" },
+      executeResult,
+    })
+  ) {
+    return { accepted: false, reason: "already_resolved" };
+  }
+
+  localPromptAbort.abort();
   return { accepted: true };
 }
 

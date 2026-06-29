@@ -91,20 +91,29 @@ function makeFakePi(rec: Recorded) {
 
 type SelectResult = string | null | undefined;
 
-type SelectFn = (msg: string, options: string[]) => Promise<SelectResult>;
+type DialogOpts = { readonly signal?: AbortSignal };
+
+type SelectFn = (
+  msg: string,
+  options: string[],
+  opts?: DialogOpts,
+) => Promise<SelectResult>;
 
 function makeCtx(
   opts: {
     hasUI?: boolean;
     cwd?: string;
-    pick?: (options: string[]) => SelectResult | Promise<SelectResult>;
+    pick?: (
+      options: string[],
+      opts?: DialogOpts,
+    ) => SelectResult | Promise<SelectResult>;
   } = {},
 ) {
   const notify = jest.fn();
   const select = jest
     .fn<SelectFn>()
-    .mockImplementation((_msg, options) =>
-      Promise.resolve(opts.pick ? opts.pick(options) : null),
+    .mockImplementation((_msg, options, dialogOpts) =>
+      Promise.resolve(opts.pick ? opts.pick(options, dialogOpts) : null),
     );
   const ctx = {
     cwd: opts.cwd ?? "/repo",
@@ -1428,6 +1437,44 @@ git status --short`,
       });
     });
 
+    it("aborts the open local approval prompt when a remote response wins", async () => {
+      let remoteResult: unknown;
+      let capturedSignal: AbortSignal | undefined;
+      let sawAbort = false;
+      const responder: { current: ((response: unknown) => unknown) | null } = {
+        current: null,
+      };
+      const recorded = setup({ configFile: '{"allowed":[]}' }, (name, data) => {
+        if (name === "pi-bash-approval:request") {
+          responder.current = data.respond as (response: unknown) => unknown;
+        }
+      });
+      const { ctx } = makeCtx({
+        pick: (_options, opts) => {
+          capturedSignal = opts?.signal;
+          capturedSignal?.addEventListener("abort", () => {
+            sawAbort = true;
+          });
+          remoteResult = responder.current?.({
+            source: "remote",
+            action: "allow_once",
+          });
+
+          return new Promise<SelectResult>(() => undefined);
+        },
+      });
+
+      const result = await recorded.toolCallHandler!(
+        bashEvent("git status"),
+        ctx,
+      );
+
+      expect(result).toBeUndefined();
+      expect(remoteResult).toEqual({ accepted: true });
+      expect(capturedSignal?.aborted).toBe(true);
+      expect(sawAbort).toBe(true);
+    });
+
     it("rejects late remote responses after local deny blocks", async () => {
       const responder: { current: ((response: unknown) => unknown) | null } = {
         current: null,
@@ -1483,6 +1530,42 @@ git status --short`,
         accepted: false,
         reason: "invalid_response",
       });
+    });
+
+    it("rejects unknown remote actions instead of treating them as allow-always", async () => {
+      let malformedResult: unknown;
+      const recorded = setup({ configFile: '{"allowed":[]}' }, (name, data) => {
+        if (name === "pi-bash-approval:request") {
+          const options = data.options as Array<{
+            id: string;
+            action: string;
+            rule?: string;
+          }>;
+          const allowAlways = options.find(
+            (option) => option.action === "allow_always" && option.rule,
+          );
+          const respond = data.respond as (response: unknown) => unknown;
+          malformedResult = respond({
+            source: "remote",
+            action: "bogus",
+            optionId: allowAlways?.id,
+            rule: allowAlways?.rule,
+          });
+        }
+      });
+      const { ctx, select } = makeCtx({ pick: () => "Allow once" });
+
+      const result = await recorded.toolCallHandler!(
+        bashEvent("git status"),
+        ctx,
+      );
+
+      expect(result).toBeUndefined();
+      expect(malformedResult).toEqual({
+        accepted: false,
+        reason: "invalid_response",
+      });
+      expect(select).toHaveBeenCalled();
     });
 
     it("falls back to local UI when an event listener throws", async () => {

@@ -116,9 +116,10 @@ immediately to `~/.pi/agent/.bash-approval`.
 
 The extension emits lifecycle events on `pi.events` so another extension can
 mirror approvals remotely while the local TUI remains active. For manual
-approval requests the first valid local or remote answer wins; late remote
-responses return `{ accepted: false, reason: "already_resolved" }`. Listener
-failures are ignored so normal bash approval behavior remains the fallback.
+approval requests the first valid local or remote answer wins; when a remote
+answer wins, the open local prompt is dismissed. Late remote responses return
+`{ accepted: false, reason: "already_resolved" }`. Listener failures are ignored
+so normal bash approval behavior remains the fallback.
 
 | Event                             | When it fires                                           |
 | --------------------------------- | ------------------------------------------------------- |
