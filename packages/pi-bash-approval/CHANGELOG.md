@@ -1,8 +1,10 @@
 # @fgladisch/pi-bash-approval
 
-## Unreleased
+## 0.2.7
 
-- Add inter-extension lifecycle events for remote bash approval mirroring and responses.
+### Patch Changes
+
+- [#37](https://github.com/fgladisch/pi-extensions/pull/37) [`6c18825`](https://github.com/fgladisch/pi-extensions/commit/6c18825f2ee194817c9be03cd24ef4181b06b4cd) Thanks [@testzugang](https://github.com/testzugang)! - Add inter-extension lifecycle events for remote prompt and bash approval mirroring with first-response-wins callbacks.
 
 ## 0.2.6
 
