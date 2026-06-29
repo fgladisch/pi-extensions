@@ -8,13 +8,14 @@ import type {
   BashApprovalSettings,
   CommandEvaluation,
   GlobalSettings,
+  PersistRuleResult,
   PromptOptions,
   SplitState,
 } from "./models";
 
 const CONFIG_DIR = path.join(os.homedir(), ".pi", "agent");
 const SETTINGS_PATH = path.join(CONFIG_DIR, "settings.json");
-const ALLOW_LIST_PATH = path.join(CONFIG_DIR, ".bash-approval");
+export const ALLOW_LIST_PATH = path.join(CONFIG_DIR, ".bash-approval");
 
 const DEFAULT_CONFIG: BashApprovalConfig = {
   allowed: [],
@@ -1010,9 +1011,9 @@ function persistRule(
   config: BashApprovalConfig,
   rule: string,
   ctx: ApprovalCtx,
-): void {
+): PersistRuleResult {
   if (config.allowed.includes(rule)) {
-    return;
+    return { rule, path: ALLOW_LIST_PATH, success: true };
   }
 
   config.allowed.push(rule);
@@ -1021,8 +1022,13 @@ function persistRule(
     fs.mkdirSync(CONFIG_DIR, { recursive: true });
     fs.appendFileSync(ALLOW_LIST_PATH, `${rule}\n`, "utf8");
     ctx.ui.notify(`Added rule: ${rule}`, "info");
+
+    return { rule, path: ALLOW_LIST_PATH, success: true };
   } catch (error: unknown) {
-    ctx.ui.notify(`Failed to persist rule: ${errorMessage(error)}`, "error");
+    const message = errorMessage(error);
+    ctx.ui.notify(`Failed to persist rule: ${message}`, "error");
+
+    return { rule, path: ALLOW_LIST_PATH, success: false, error: message };
   }
 }
 
@@ -1031,10 +1037,12 @@ export function applyChoice(
   prompt: PromptOptions,
   config: BashApprovalConfig,
   ctx: ApprovalCtx,
-): void {
+): PersistRuleResult | null {
   const rule = prompt.rulesByOption[choice];
 
-  if (rule) {
-    persistRule(config, rule, ctx);
+  if (!rule) {
+    return null;
   }
+
+  return persistRule(config, rule, ctx);
 }
