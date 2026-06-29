@@ -1,15 +1,16 @@
 # @fgladisch/pi-user-select
 
+## 0.1.4
+
+### Patch Changes
+
+- [#37](https://github.com/fgladisch/pi-extensions/pull/37) [`6c18825`](https://github.com/fgladisch/pi-extensions/commit/6c18825f2ee194817c9be03cd24ef4181b06b4cd) Thanks [@testzugang](https://github.com/testzugang)! - Add inter-extension lifecycle events for remote prompt and bash approval mirroring with first-response-wins callbacks.
+
 ## 0.1.3
 
 ### Patch Changes
 
 - Render a trailing blank line after option descriptions in user select prompts.
-
-## Unreleased
-
-- Add inter-extension lifecycle events for remote selection mirroring and responses.
-- Render option descriptions after a blank line with four-space indentation and a trailing blank line before the next option.
 
 ## 0.1.1
 
