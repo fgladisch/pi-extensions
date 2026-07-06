@@ -1,5 +1,11 @@
 # @fgladisch/pi-bash-approval
 
+## 0.2.8
+
+### Patch Changes
+
+- [`d2ce9a9`](https://github.com/fgladisch/pi-extensions/commit/d2ce9a91d0f554f49a0676521c914a4d66e21741) Thanks [@fgladisch](https://github.com/fgladisch)! - Treat background `&` and grouping parentheses as shell syntax during bash approval splitting so grouped dev-server commands suggest clean allow-list rules.
+
 ## 0.2.7
 
 ### Patch Changes
