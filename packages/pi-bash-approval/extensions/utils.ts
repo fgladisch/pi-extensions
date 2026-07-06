@@ -211,6 +211,22 @@ function isSingleSeparator(char: string): boolean {
   return char === ";" || char === "|" || char === "\n";
 }
 
+function isBackgroundSeparator(
+  char: string,
+  previousChar: string | undefined,
+  nextChar: string | undefined,
+): boolean {
+  if (char !== "&" || nextChar === "&") {
+    return false;
+  }
+
+  return previousChar !== ">" && previousChar !== "<" && nextChar !== ">";
+}
+
+function isGroupingSeparator(char: string): boolean {
+  return char === "(" || char === ")";
+}
+
 function flushSegment(state: SplitState): void {
   state.parts.push(state.current);
   state.current = "";
@@ -279,6 +295,7 @@ function stepOutsideBacktick(
 
 function stepOutsideQuote(
   char: string,
+  previousChar: string | undefined,
   nextChar: string | undefined,
   state: SplitState,
 ): number {
@@ -322,7 +339,12 @@ function stepOutsideQuote(
     return 2;
   }
 
-  if (isSingleSeparator(char)) {
+  if (isBackgroundSeparator(char, previousChar, nextChar)) {
+    flushSegment(state);
+    return 1;
+  }
+
+  if (isSingleSeparator(char) || isGroupingSeparator(char)) {
     flushSegment(state);
     return 1;
   }
@@ -344,6 +366,8 @@ function splitCommand(command: string): string[] {
 
   while (index < commandWithoutHeredocBodies.length) {
     const char = commandWithoutHeredocBodies.at(index) ?? "";
+    const previousChar =
+      index > 0 ? commandWithoutHeredocBodies.at(index - 1) : undefined;
     const nextChar = commandWithoutHeredocBodies.at(index + 1);
 
     if (state.backtickDepth > 0) {
@@ -351,7 +375,7 @@ function splitCommand(command: string): string[] {
     } else if (state.quote) {
       index += stepInsideQuote(char, nextChar, state);
     } else {
-      index += stepOutsideQuote(char, nextChar, state);
+      index += stepOutsideQuote(char, previousChar, nextChar, state);
     }
   }
 

@@ -64,9 +64,9 @@ and should be used sparingly.
 ### `splitChains`
 
 Default `true`: split incoming commands on shell separators (`&&`, `||`, `;`,
-`|`, newline) and require **every** segment to match the allow-list. Example:
-`cd foo && git log` only runs unprompted when both segments are allow-listed.
-Set `false` to match the entire command string as one unit.
+`|`, `&`, newline) and require **every** segment to match the allow-list.
+Example: `cd foo && git log` only runs unprompted when both segments are
+allow-listed. Set `false` to match the entire command string as one unit.
 
 ### Shell control filtering
 
@@ -75,6 +75,8 @@ approval checks focus on actual commands:
 
 - ignored heads include `if`, `then`, `elif`, `else`, `for`, `do`, `done`, `fi`,
   `while`, `until`, `case`, `esac`, `function`
+- grouping parentheses around subshells are treated as shell syntax, so
+  `(pnpm dev & echo $!)` evaluates the inner `pnpm dev` and `echo` commands
 - condition tests (`[ ... ]`, `[[ ... ]]`, `test ...`) are ignored
 - assignment-only segments like `FOO=bar` are ignored
 - redirection-only segments like `> /tmp/out` after shell groups are ignored

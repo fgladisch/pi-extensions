@@ -567,6 +567,21 @@ describe("bash-approval extension", () => {
       expect(result).toBeUndefined();
     });
 
+    it("permits grouped background commands when every command segment matches", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "mkdir -p:*\npnpm dev:*\necho:*\ncat:*\n",
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent(
+          'mkdir -p .pi/tmp\n(pnpm dev > .pi/tmp/local-app.log 2>&1 & echo $! > .pi/tmp/local-app.pid)\necho "pid=$(cat .pi/tmp/local-app.pid)"',
+        ),
+        makeCtx({ hasUI: false }).ctx,
+      );
+
+      expect(result).toBeUndefined();
+    });
+
     it("still evaluates commands that follow assignment prefixes", async () => {
       const { toolCallHandler } = setup({
         allowListFile: "echo:*\n",
@@ -1129,6 +1144,32 @@ git status --short`,
       );
 
       expect(captured).toContain("Allow always: ./evil.sh:*");
+    });
+
+    it("suggests commands inside grouped background segments without grouping parentheses", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "mkdir -p:*\ncat:*\n",
+      });
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pick: (options) => {
+          captured = options;
+
+          return "Deny";
+        },
+      });
+
+      await toolCallHandler!(
+        bashEvent(
+          'mkdir -p .pi/tmp\n(pnpm dev > .pi/tmp/local-app.log 2>&1 & echo $! > .pi/tmp/local-app.pid)\necho "pid=$(cat .pi/tmp/local-app.pid)"',
+        ),
+        ctx,
+      );
+
+      expect(captured).toContain("Allow always: pnpm dev:*");
+      expect(captured).toContain("Allow always (command): pnpm:*");
+      expect(captured).not.toContain("Allow always: (pnpm dev:*");
+      expect(captured).not.toContain("Allow always (command): (pnpm:*");
     });
 
     it("does not suggest redirection-only prefixes from shell groups", async () => {
