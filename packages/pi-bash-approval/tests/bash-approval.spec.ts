@@ -1355,6 +1355,18 @@ git status --short`,
 
       expect(result).toBeUndefined();
     });
+
+    it("treats trailing backslash-newline as line continuation", async () => {
+      const { toolCallHandler } = setup({
+        configFile: JSON.stringify({ allowed: ["cd:*", "git:*"] }),
+      });
+      const result = await toolCallHandler!(
+        bashEvent("cd /tmp && \\\ngit status"),
+        makeCtx().ctx,
+      );
+
+      expect(result).toBeUndefined();
+    });
   });
 
   describe("remote interaction events", () => {

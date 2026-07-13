@@ -299,6 +299,16 @@ function stepOutsideQuote(
   nextChar: string | undefined,
   state: SplitState,
 ): number {
+  if (char === "\\" && nextChar !== undefined) {
+    if (nextChar === "\n") {
+      // Line continuation: bash removes the backslash-newline pair entirely.
+      return 2;
+    }
+
+    state.current += `${char}${nextChar}`;
+    return 2;
+  }
+
   if (char === '"' || char === "'") {
     state.quote = char;
     state.current += char;
