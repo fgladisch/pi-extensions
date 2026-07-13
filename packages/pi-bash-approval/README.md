@@ -22,17 +22,18 @@ The extension reads two files:
 
 ### Global settings (`settings.json`)
 
-`splitChains` lives at `bashApproval.splitChains`:
+`splitChains` and `notifyHerdr` live under `bashApproval`:
 
 ```json
 {
   "bashApproval": {
-    "splitChains": true
+    "splitChains": true,
+    "notifyHerdr": true
   }
 }
 ```
 
-If missing or malformed, `splitChains` defaults to `true`.
+If missing or malformed, both default to `true`.
 
 ### Allow-list rules (`.bash-approval`)
 
@@ -67,6 +68,14 @@ Default `true`: split incoming commands on shell separators (`&&`, `||`, `;`,
 `|`, `&`, newline) and require **every** segment to match the allow-list.
 Example: `cd foo && git log` only runs unprompted when both segments are
 allow-listed. Set `false` to match the entire command string as one unit.
+
+### `notifyHerdr`
+
+Default `true`: while an interactive approval prompt is open, emit a
+`herdr:blocked` event (`{ active: true, label }`) so a co-installed herdr
+agent-state extension reports the pane as **blocked**, and a matching
+`{ active: false }` when the prompt resolves. The
+event is a no-op when herdr is not installed. Set `false` to opt out.
 
 ### Shell control filtering
 
@@ -134,6 +143,7 @@ so normal bash approval behavior remains the fallback.
 | `pi-bash-approval:allowed`        | When a command is allowed by allow-list or user choice. |
 | `pi-bash-approval:blocked`        | When a command is blocked.                              |
 | `pi-bash-approval:closed`         | When a manual approval request can no longer answer.    |
+| `herdr:blocked`                   | Toggled `active` around an open prompt (`notifyHerdr`). |
 
 `pi-bash-approval:request` includes stable option IDs and a
 `respond(response)` callback. Remote responders can submit
