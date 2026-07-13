@@ -1455,14 +1455,12 @@ git status --short`,
       expect(recorded.emitted.map(({ name }) => name)).toEqual([
         "pi-bash-approval:config_loaded",
         "pi-bash-approval:evaluated",
-        "herdr:blocked",
         "pi-bash-approval:request",
         "pi-bash-approval:resolved",
         "pi-bash-approval:allowed",
-        "herdr:blocked",
         "pi-bash-approval:closed",
       ]);
-      expect(recorded.emitted.at(3)?.data).toMatchObject({
+      expect(recorded.emitted.at(2)?.data).toMatchObject({
         plugin: "pi-bash-approval",
         kind: "bash_approval",
         toolCallId: "bash-call-1",
@@ -1470,11 +1468,11 @@ git status --short`,
         command: "git status",
         failingSegment: "git status",
       });
-      expect(recorded.emitted.at(4)?.data).toMatchObject({
+      expect(recorded.emitted.at(3)?.data).toMatchObject({
         selectedBy: "remote",
         decision: { action: "allow_once" },
       });
-      expect(recorded.emitted.at(5)?.data).toMatchObject({
+      expect(recorded.emitted.at(4)?.data).toMatchObject({
         mode: "allow_once",
         selectedBy: "remote",
       });
@@ -1543,11 +1541,11 @@ git status --short`,
         accepted: false,
         reason: "already_resolved",
       });
-      expect(recorded.emitted.at(4)?.data).toMatchObject({
+      expect(recorded.emitted.at(3)?.data).toMatchObject({
         selectedBy: "local",
         decision: { action: "deny", reason: "Blocked by user" },
       });
-      expect(recorded.emitted.at(5)).toMatchObject({
+      expect(recorded.emitted.at(4)).toMatchObject({
         name: "pi-bash-approval:blocked",
         data: { selectedBy: "local", reason: "Blocked by user" },
       });
@@ -1628,11 +1626,9 @@ git status --short`,
       expect(recorded.emitted.map(({ name }) => name)).toEqual([
         "pi-bash-approval:config_loaded",
         "pi-bash-approval:evaluated",
-        "herdr:blocked",
         "pi-bash-approval:request",
         "pi-bash-approval:resolved",
         "pi-bash-approval:allowed",
-        "herdr:blocked",
         "pi-bash-approval:closed",
       ]);
     });
@@ -1703,7 +1699,7 @@ git status --short`,
       });
     });
 
-    it("defaults to notifying herdr when the setting is absent", async () => {
+    it("does not notify herdr when the setting is absent", async () => {
       const { toolCallHandler, emitted } = setup({
         configFile: '{"allowed":[]}',
       });
@@ -1711,9 +1707,7 @@ git status --short`,
 
       await toolCallHandler!(bashEvent("git status"), ctx);
 
-      expect(
-        emitted.filter(({ name }) => name === "herdr:blocked").length,
-      ).toBe(2);
+      expect(emitted.some(({ name }) => name === "herdr:blocked")).toBe(false);
     });
 
     it("does not notify herdr when notifyHerdr is disabled", async () => {

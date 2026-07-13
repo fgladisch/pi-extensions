@@ -28,12 +28,13 @@ The extension reads two files:
 {
   "bashApproval": {
     "splitChains": true,
-    "notifyHerdr": true
+    "notifyHerdr": false
   }
 }
 ```
 
-If missing or malformed, both default to `true`.
+If missing or malformed, `splitChains` defaults to `true` and `notifyHerdr`
+defaults to `false`.
 
 ### Allow-list rules (`.bash-approval`)
 
@@ -71,11 +72,11 @@ allow-listed. Set `false` to match the entire command string as one unit.
 
 ### `notifyHerdr`
 
-Default `true`: while an interactive approval prompt is open, emit a
-`herdr:blocked` event (`{ active: true, label }`) so a co-installed herdr
-agent-state extension reports the pane as **blocked**, and a matching
-`{ active: false }` when the prompt resolves. The
-event is a no-op when herdr is not installed. Set `false` to opt out.
+Default `false`. Set `true` to emit a `herdr:blocked` event
+(`{ active: true, label }`) while an interactive approval prompt is open, so a
+co-installed herdr agent-state extension reports the pane as **blocked**, and a
+matching `{ active: false }` when the prompt resolves. The event is a no-op when
+herdr is not installed.
 
 ### Shell control filtering
 

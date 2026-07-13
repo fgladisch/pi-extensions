@@ -20,7 +20,7 @@ export const ALLOW_LIST_PATH = path.join(CONFIG_DIR, ".bash-approval");
 const DEFAULT_CONFIG: BashApprovalConfig = {
   allowed: [],
   splitChains: true,
-  notifyHerdr: true,
+  notifyHerdr: false,
 };
 
 const PREFIX_GLOB_SUFFIX_LENGTH = 2;
