@@ -1,10 +1,12 @@
 export type BashApprovalConfig = {
   allowed: string[];
   splitChains: boolean;
+  notifyHerdr: boolean;
 };
 
 export type BashApprovalSettings = {
   readonly splitChains?: unknown;
+  readonly notifyHerdr?: unknown;
 };
 
 export type GlobalSettings = {
