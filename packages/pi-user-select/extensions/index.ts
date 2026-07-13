@@ -21,6 +21,7 @@ import {
   cancelledResult,
   customAnswerResult,
   getCustomAnswerLabel,
+  loadNotifyHerdr,
   resolveSelectedOption,
   selectedOptionResult,
   UserSelectParamsSchema,
@@ -56,6 +57,8 @@ type CwdContext = {
 };
 
 export default function (pi: ExtensionAPI) {
+  const notifyHerdr = loadNotifyHerdr();
+
   pi.registerTool({
     name: TOOL_NAME,
     label: "User Select",
@@ -121,6 +124,10 @@ export default function (pi: ExtensionAPI) {
       };
 
       try {
+        if (notifyHerdr) {
+          emitHerdrBlocked(pi, true, question);
+        }
+
         emitSafe(pi, "pi-user-select:request", requestEvent);
 
         if (!controller.isSettled()) {
@@ -162,6 +169,10 @@ export default function (pi: ExtensionAPI) {
         emitSafe(pi, "pi-user-select:error", errorEvent);
         throw error;
       } finally {
+        if (notifyHerdr) {
+          emitHerdrBlocked(pi, false, question);
+        }
+
         const closedEvent: UserSelectClosedEvent = {
           ...requestBase,
           reason: closedReason,
@@ -462,6 +473,14 @@ function emitSafe(pi: ExtensionAPI, name: string, data: unknown): void {
   } catch {
     // Event listeners must not break the local TUI fallback.
   }
+}
+
+function emitHerdrBlocked(
+  pi: ExtensionAPI,
+  active: boolean,
+  label?: string,
+): void {
+  emitSafe(pi, "herdr:blocked", { active, label });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
