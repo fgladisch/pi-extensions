@@ -1,3 +1,6 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { Type } from "typebox";
 
 import type {
@@ -6,6 +9,32 @@ import type {
   UserSelectDetails,
   UserSelectInput,
 } from "./models";
+
+const SETTINGS_PATH = path.join(os.homedir(), ".pi", "agent", "settings.json");
+const DEFAULT_NOTIFY_HERDR = false;
+
+type GlobalSettings = {
+  readonly userSelect?: { readonly notifyHerdr?: unknown };
+};
+
+export function loadNotifyHerdr(): boolean {
+  try {
+    const parsed = JSON.parse(
+      fs.readFileSync(SETTINGS_PATH, "utf8"),
+    ) as Partial<GlobalSettings>;
+    const { userSelect } = parsed;
+
+    if (!userSelect || typeof userSelect !== "object") {
+      return DEFAULT_NOTIFY_HERDR;
+    }
+
+    return typeof userSelect.notifyHerdr === "boolean"
+      ? userSelect.notifyHerdr
+      : DEFAULT_NOTIFY_HERDR;
+  } catch {
+    return DEFAULT_NOTIFY_HERDR;
+  }
+}
 
 const CUSTOM_ANSWER_LABEL = "(Type custom answer)";
 const DISPLAY_INDEX_OFFSET = 1;
