@@ -1,5 +1,11 @@
 # @fgladisch/pi-user-select
 
+## 0.2.0
+
+### Minor Changes
+
+- [#41](https://github.com/fgladisch/pi-extensions/pull/41) [`07397b6`](https://github.com/fgladisch/pi-extensions/commit/07397b6c78236a36eeee2425a46fedf6156deb61) Thanks [@flying7eleven](https://github.com/flying7eleven)! - Emit `herdr:blocked` events (toggling `active`) around interactive `user_select` prompts so a co-installed herdr agent-state extension reports the pane as blocked while awaiting a selection or custom answer. Controlled by the opt-in `userSelect.notifyHerdr` setting (default `false`).
+
 ## 0.1.4
 
 ### Patch Changes

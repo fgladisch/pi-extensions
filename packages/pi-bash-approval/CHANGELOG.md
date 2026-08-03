@@ -1,5 +1,11 @@
 # @fgladisch/pi-bash-approval
 
+## 0.3.0
+
+### Minor Changes
+
+- [#40](https://github.com/fgladisch/pi-extensions/pull/40) [`ebea7c8`](https://github.com/fgladisch/pi-extensions/commit/ebea7c8068d15733064b505fdab5f1c9b981f250) Thanks [@flying7eleven](https://github.com/flying7eleven)! - Emit `herdr:blocked` events (toggling `active`) around interactive bash approval prompts so a co-installed herdr agent-state extension reports the pane as blocked while awaiting approval. Controlled by the opt-in `bashApproval.notifyHerdr` setting (default `false`).
+
 ## 0.2.8
 
 ### Patch Changes
