@@ -12,11 +12,29 @@ between mutually exclusive paths instead of guessing.
 pi install npm:@fgladisch/pi-user-select
 ```
 
-No config, no slash commands.
+No slash commands. One optional setting (see [Config](#config)).
 
 ## Example
 
 ![User select example](./example.png)
+
+## Config
+
+Optional. Read from `~/.pi/agent/settings.json` under `userSelect`:
+
+```json
+{
+  "userSelect": {
+    "notifyHerdr": false
+  }
+}
+```
+
+`notifyHerdr` (default `false`): when `true`, emit a `herdr:blocked` event
+(`{ active: true, label }`) while an interactive `user_select` prompt is open so
+a co-installed herdr agent-state extension reports the pane as **blocked**, and
+a matching `{ active: false }` when it resolves (covering the custom-answer
+input too). The event is a no-op when herdr is not installed.
 
 ## Tool schema
 
@@ -70,13 +88,14 @@ answer wins; when a remote answer wins, the open local dialog is dismissed. Late
 responses return `{ accepted: false, reason: "already_resolved" }`. Listener
 failures are ignored so the local UI remains the fallback.
 
-| Event                                 | When it fires                                      |
-| ------------------------------------- | -------------------------------------------------- |
-| `pi-user-select:request`              | Before opening the local selection prompt.         |
-| `pi-user-select:custom-input-request` | Before opening the local custom-answer input.      |
-| `pi-user-select:resolved`             | After local or remote selection/cancellation wins. |
-| `pi-user-select:error`                | When execution fails unexpectedly.                 |
-| `pi-user-select:closed`               | When a request can no longer be answered.          |
+| Event                                 | When it fires                                           |
+| ------------------------------------- | ------------------------------------------------------- |
+| `pi-user-select:request`              | Before opening the local selection prompt.              |
+| `pi-user-select:custom-input-request` | Before opening the local custom-answer input.           |
+| `pi-user-select:resolved`             | After local or remote selection/cancellation wins.      |
+| `pi-user-select:error`                | When execution fails unexpectedly.                      |
+| `pi-user-select:closed`               | When a request can no longer be answered.               |
+| `herdr:blocked`                       | Toggled `active` around an open prompt (`notifyHerdr`). |
 
 Request events include a `respond(response)` callback. `pi-user-select:request`
 accepts remote `{ source: "remote", kind: "select", optionIndex }`,

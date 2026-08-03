@@ -38,6 +38,10 @@ jest.mock(
   { virtual: true },
 );
 
+jest.mock("node:fs", () => ({
+  readFileSync: jest.fn(),
+}));
+
 // ---------- helper types ----------
 
 type ToolDefinition = {
@@ -135,8 +139,23 @@ function makeCtx(
   return { ctx, notify, select, input };
 }
 
-function setup(onEmit?: Recorded["onEmit"]): Recorded {
+function setup(onEmit?: Recorded["onEmit"], settingsFile?: string): Recorded {
   jest.resetModules();
+
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const fs = require("node:fs") as {
+    readFileSync: jest.Mock<(...args: unknown[]) => unknown>;
+  };
+  fs.readFileSync.mockReset();
+  fs.readFileSync.mockImplementation(() => {
+    if (settingsFile === undefined) {
+      const err = new Error("ENOENT") as NodeJS.ErrnoException;
+      err.code = "ENOENT";
+      throw err;
+    }
+
+    return settingsFile;
+  });
 
   const recorded: Recorded = { tools: new Map(), emitted: [], onEmit };
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -144,6 +163,10 @@ function setup(onEmit?: Recorded["onEmit"]): Recorded {
   mod.default(makeFakePi(recorded));
 
   return recorded;
+}
+
+function herdrEnabledSettings(notifyHerdr = true): string {
+  return JSON.stringify({ userSelect: { notifyHerdr } });
 }
 
 function getTool(): ToolDefinition {
@@ -882,6 +905,155 @@ describe("user-select extension", () => {
         error: expect.stringMatching(/unknown option/),
       });
       expect(recorded.emitted.at(2)?.data).toMatchObject({ reason: "error" });
+    });
+  });
+
+  describe("herdr notifications", () => {
+    it("brackets an interactive prompt with herdr:blocked active toggles", async () => {
+      const recorded = setup(undefined, herdrEnabledSettings());
+      const tool = recorded.tools.get("user_select")!;
+      const { ctx } = makeCtx({ pickOption: (options) => options.at(0) });
+
+      await tool.execute(
+        "id",
+        { question: "Pick one", options: SAMPLE_OPTIONS },
+        null,
+        null,
+        ctx,
+      );
+
+      const herdrEvents = recorded.emitted.filter(
+        ({ name }) => name === "herdr:blocked",
+      );
+      expect(herdrEvents.map(({ data }) => data.active)).toEqual([true, false]);
+      expect(herdrEvents.at(0)?.data).toMatchObject({
+        active: true,
+        label: "Pick one",
+      });
+    });
+
+    it("stays blocked across the custom-answer flow with one balanced toggle", async () => {
+      const recorded = setup(undefined, herdrEnabledSettings());
+      const tool = recorded.tools.get("user_select")!;
+      const { ctx } = makeCtx({
+        pickOption: (options) =>
+          options.find((option) => option === "(Type custom answer)") ?? null,
+        typedAnswer: "bun",
+      });
+
+      await tool.execute(
+        "id",
+        { question: "Pick one", options: SAMPLE_OPTIONS, allowCustom: true },
+        null,
+        null,
+        ctx,
+      );
+
+      const herdrEvents = recorded.emitted.filter(
+        ({ name }) => name === "herdr:blocked",
+      );
+      expect(herdrEvents.map(({ data }) => data.active)).toEqual([true, false]);
+    });
+
+    it("toggles herdr off even when execution fails", async () => {
+      const recorded = setup(undefined, herdrEnabledSettings());
+      const tool = recorded.tools.get("user_select")!;
+      const { ctx } = makeCtx({ pickOption: () => "totally made up" });
+
+      await expect(
+        tool.execute(
+          "id",
+          { question: "Pick one", options: SAMPLE_OPTIONS },
+          null,
+          null,
+          ctx,
+        ),
+      ).rejects.toThrow(/unknown option/);
+
+      const herdrEvents = recorded.emitted.filter(
+        ({ name }) => name === "herdr:blocked",
+      );
+      expect(herdrEvents.map(({ data }) => data.active)).toEqual([true, false]);
+    });
+
+    it("does not notify herdr for non-interactive runs", async () => {
+      const recorded = setup(undefined, herdrEnabledSettings());
+      const tool = recorded.tools.get("user_select")!;
+      const { ctx } = makeCtx({ hasUI: false });
+
+      await expect(
+        tool.execute(
+          "id",
+          { question: "Pick one", options: SAMPLE_OPTIONS },
+          null,
+          null,
+          ctx,
+        ),
+      ).rejects.toThrow(/non-interactive/);
+
+      expect(
+        recorded.emitted.some(({ name }) => name === "herdr:blocked"),
+      ).toBe(false);
+    });
+
+    it("does not notify herdr when the setting is absent", async () => {
+      const recorded = setup();
+      const tool = recorded.tools.get("user_select")!;
+      const { ctx } = makeCtx({ pickOption: (options) => options.at(0) });
+
+      await tool.execute(
+        "id",
+        { question: "Pick one", options: SAMPLE_OPTIONS },
+        null,
+        null,
+        ctx,
+      );
+
+      expect(
+        recorded.emitted.some(({ name }) => name === "herdr:blocked"),
+      ).toBe(false);
+    });
+
+    it("does not notify herdr when explicitly disabled", async () => {
+      const recorded = setup(undefined, herdrEnabledSettings(false));
+      const tool = recorded.tools.get("user_select")!;
+      const { ctx } = makeCtx({ pickOption: (options) => options.at(0) });
+
+      await tool.execute(
+        "id",
+        { question: "Pick one", options: SAMPLE_OPTIONS },
+        null,
+        null,
+        ctx,
+      );
+
+      expect(
+        recorded.emitted.some(({ name }) => name === "herdr:blocked"),
+      ).toBe(false);
+    });
+
+    it("treats malformed or non-boolean settings as disabled", async () => {
+      for (const settingsFile of [
+        "not json",
+        "{}",
+        JSON.stringify({ userSelect: { notifyHerdr: "yes" } }),
+      ]) {
+        const recorded = setup(undefined, settingsFile);
+        const tool = recorded.tools.get("user_select")!;
+        const { ctx } = makeCtx({ pickOption: (options) => options.at(0) });
+
+        await tool.execute(
+          "id",
+          { question: "Pick one", options: SAMPLE_OPTIONS },
+          null,
+          null,
+          ctx,
+        );
+
+        expect(
+          recorded.emitted.some(({ name }) => name === "herdr:blocked"),
+        ).toBe(false);
+      }
     });
   });
 });
