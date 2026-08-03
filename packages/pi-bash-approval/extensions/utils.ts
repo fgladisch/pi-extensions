@@ -20,6 +20,7 @@ export const ALLOW_LIST_PATH = path.join(CONFIG_DIR, ".bash-approval");
 const DEFAULT_CONFIG: BashApprovalConfig = {
   allowed: [],
   splitChains: true,
+  notifyHerdr: false,
 };
 
 const PREFIX_GLOB_SUFFIX_LENGTH = 2;
@@ -98,6 +99,14 @@ function sanitizeSplitChains(value: unknown): boolean {
   return DEFAULT_CONFIG.splitChains;
 }
 
+function sanitizeNotifyHerdr(value: unknown): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  return DEFAULT_CONFIG.notifyHerdr;
+}
+
 function parseGlobalSettings(raw: string): Partial<GlobalSettings> {
   return JSON.parse(raw) as Partial<GlobalSettings>;
 }
@@ -114,15 +123,24 @@ function getBashApprovalSettings(
   return bashApproval;
 }
 
-function loadSplitChainsSetting(): boolean {
+function loadSettings(): {
+  readonly splitChains: boolean;
+  readonly notifyHerdr: boolean;
+} {
   try {
     const rawSettings = fs.readFileSync(SETTINGS_PATH, "utf8");
     const parsedSettings = parseGlobalSettings(rawSettings);
     const bashApprovalSettings = getBashApprovalSettings(parsedSettings);
 
-    return sanitizeSplitChains(bashApprovalSettings.splitChains);
+    return {
+      splitChains: sanitizeSplitChains(bashApprovalSettings.splitChains),
+      notifyHerdr: sanitizeNotifyHerdr(bashApprovalSettings.notifyHerdr),
+    };
   } catch {
-    return DEFAULT_CONFIG.splitChains;
+    return {
+      splitChains: DEFAULT_CONFIG.splitChains,
+      notifyHerdr: DEFAULT_CONFIG.notifyHerdr,
+    };
   }
 }
 
@@ -158,12 +176,13 @@ function loadAllowList(): string[] {
 }
 
 export function loadConfig(): BashApprovalConfig {
-  const splitChains = loadSplitChainsSetting();
+  const { splitChains, notifyHerdr } = loadSettings();
   const allowed = loadAllowList();
 
   return {
     allowed,
     splitChains,
+    notifyHerdr,
   };
 }
 

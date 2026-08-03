@@ -1679,6 +1679,63 @@ git status --short`,
     });
   });
 
+  describe("herdr notifications", () => {
+    it("brackets an interactive prompt with herdr:blocked active toggles", async () => {
+      const { toolCallHandler, emitted } = setup({
+        settingsFile: JSON.stringify({ bashApproval: { notifyHerdr: true } }),
+        allowListFile: "",
+      });
+      const { ctx } = makeCtx({ pick: () => "Deny" });
+
+      await toolCallHandler!(bashEvent("git status"), ctx);
+
+      const herdrEvents = emitted.filter(
+        ({ name }) => name === "herdr:blocked",
+      );
+      expect(herdrEvents.map(({ data }) => data.active)).toEqual([true, false]);
+      expect(herdrEvents.at(0)?.data).toMatchObject({
+        active: true,
+        label: "git status",
+      });
+    });
+
+    it("does not notify herdr when the setting is absent", async () => {
+      const { toolCallHandler, emitted } = setup({
+        configFile: '{"allowed":[]}',
+      });
+      const { ctx } = makeCtx({ pick: () => "Deny" });
+
+      await toolCallHandler!(bashEvent("git status"), ctx);
+
+      expect(emitted.some(({ name }) => name === "herdr:blocked")).toBe(false);
+    });
+
+    it("does not notify herdr when notifyHerdr is disabled", async () => {
+      const { toolCallHandler, emitted } = setup({
+        settingsFile: JSON.stringify({ bashApproval: { notifyHerdr: false } }),
+        allowListFile: "",
+      });
+      const { ctx } = makeCtx({ pick: () => "Deny" });
+
+      await toolCallHandler!(bashEvent("git status"), ctx);
+
+      expect(emitted.some(({ name }) => name === "herdr:blocked")).toBe(false);
+    });
+
+    it("does not notify herdr for non-interactive blocks", async () => {
+      const { toolCallHandler, emitted } = setup({
+        configFile: '{"allowed":[]}',
+      });
+
+      await toolCallHandler!(
+        bashEvent("git status"),
+        makeCtx({ hasUI: false }).ctx,
+      );
+
+      expect(emitted.some(({ name }) => name === "herdr:blocked")).toBe(false);
+    });
+  });
+
   describe("extension registration", () => {
     it("registers the expected commands and tool_call hook", () => {
       const { commands, toolCallHandler } = setup();

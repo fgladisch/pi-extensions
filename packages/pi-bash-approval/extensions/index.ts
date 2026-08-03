@@ -164,6 +164,7 @@ export default function (pi: ExtensionAPI) {
     } as const;
     const controller = createController<BashDecision>();
     const localPromptAbort = new AbortController();
+    const notifyHerdr = config.notifyHerdr;
     let closedReason: BashApprovalClosedEvent["reason"] = "resolved";
 
     const requestEvent: BashApprovalRequestEvent = {
@@ -177,6 +178,10 @@ export default function (pi: ExtensionAPI) {
     };
 
     try {
+      if (notifyHerdr) {
+        emitHerdrBlocked(pi, true, trimmedCommand);
+      }
+
       emitSafe(pi, "pi-bash-approval:request", requestEvent);
 
       if (!controller.isSettled()) {
@@ -275,6 +280,10 @@ export default function (pi: ExtensionAPI) {
       closedReason = "error";
       throw error;
     } finally {
+      if (notifyHerdr) {
+        emitHerdrBlocked(pi, false, trimmedCommand);
+      }
+
       const closedEvent: BashApprovalClosedEvent = {
         ...requestBase,
         reason: closedReason,
@@ -486,6 +495,14 @@ function emitBlocked(
     ...event,
   };
   emitSafe(pi, "pi-bash-approval:blocked", blockedEvent);
+}
+
+function emitHerdrBlocked(
+  pi: ExtensionAPI,
+  active: boolean,
+  label?: string,
+): void {
+  emitSafe(pi, "herdr:blocked", { active, label });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
